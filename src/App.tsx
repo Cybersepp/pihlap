@@ -126,7 +126,7 @@ export default function App() {
 
         {/* Atmospheric figure */}
         <img
-          src="/bg_extracted.png"
+          src={`${import.meta.env.BASE_URL}bg_extracted.png`}
           alt=""
           draggable={false}
           style={{

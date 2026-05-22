@@ -1,3 +1,6 @@
+const publicAsset = (path: string) =>
+  `${import.meta.env.BASE_URL}${path.replace(/^\//, "")}`;
+
 export interface Work {
   id: string;
   filename: string;
@@ -21,7 +24,7 @@ export const works: Work[] = [
     location: "Lisbon, Portugal",
     description: "A music video following a dancer through the crumbling grandeur of an abandoned palacio. Light and decay intertwine as movement becomes memory.",
     process: "Shot over two days with available light and a single Arri Amira. The edit was built around the dancer's breath rather than the beat.",
-    loopUrl: "/video.gif",
+    loopUrl: publicAsset("video.gif"),
     fullPieceUrl: "https://vimeo.com",
   },
   {
@@ -33,7 +36,7 @@ export const works: Work[] = [
     location: "Faroe Islands",
     description: "A short film commissioned for Tidal's artist residency program, capturing a composer's encounter with Atlantic silence. The sea itself becomes an instrument.",
     process: "Minimal crew of three. All sound recorded on location — no studio ADR. Grade pushed deep into teal and shadow to match the landscape's emotional register.",
-    loopUrl: "/video.gif",
+    loopUrl: publicAsset("video.gif"),
     fullPieceUrl: "https://vimeo.com",
   },
   {
@@ -44,7 +47,7 @@ export const works: Work[] = [
     location: "Estonian countryside",
     description: "A personal project made during a residency in rural Estonia. Slow cinema. A woman, a field, an afternoon that lasts years.",
     process: "Entirely self-directed. Canon R5C with vintage Zeiss glass. The pace was decided in post — each shot held until it became uncomfortable, then held a little longer.",
-    loopUrl: "/video.gif",
+    loopUrl: publicAsset("video.gif"),
     fullPieceUrl: "https://vimeo.com",
   },
   {
@@ -56,7 +59,7 @@ export const works: Work[] = [
     location: "Berlin, Germany",
     description: "Concert film for the Berlin Philharmonic's 2022 season opener. The camera moves with the music — never static, never illustrative.",
     process: "Multi-camera shoot with handheld and crane. The edit session was 40 days. The final cut mirrors the structure of the symphony.",
-    loopUrl: "/video.gif",
+    loopUrl: publicAsset("video.gif"),
     fullPieceUrl: "https://vimeo.com",
   },
   {
@@ -67,7 +70,7 @@ export const works: Work[] = [
     location: "Tallinn, Estonia",
     description: "A contemplative portrait of three Estonian fishermen and the silence between their words. Part of a longer documentary series on disappearing crafts.",
     process: "Observational documentary approach. No interviews, no voice-over. Presence and patience were the main tools.",
-    loopUrl: "/video.gif",
+    loopUrl: publicAsset("video.gif"),
     fullPieceUrl: "https://vimeo.com",
   },
   {
@@ -79,7 +82,7 @@ export const works: Work[] = [
     location: "Paris, France",
     description: "Fashion film for Acne Studios' AW23 collection. Shot at the peripherique at night — orange sodium light, movement, the city as fabric.",
     process: "One overnight shoot with a tight 4-person crew. The final edit is 3 minutes without a cut. Movement was choreographed against the rhythm of traffic.",
-    loopUrl: "/video.gif",
+    loopUrl: publicAsset("video.gif"),
     fullPieceUrl: "https://vimeo.com",
   },
   {
@@ -90,7 +93,7 @@ export const works: Work[] = [
     location: "Saaremaa, Estonia",
     description: "A silent film about a farmhouse being dismantled. Objects carried out, light changing, the structure breathing its last. No people visible.",
     process: "Three weeks on the island. The camera was on a tripod for every shot. Post-processing was minimal — the footage needed no help.",
-    loopUrl: "/video.gif",
+    loopUrl: publicAsset("video.gif"),
     fullPieceUrl: "https://vimeo.com",
   },
   {
@@ -102,7 +105,7 @@ export const works: Work[] = [
     location: "Lapland, Finland",
     description: "Campaign film for Visit Finland shot entirely above the Arctic Circle in January. Six nights in temperatures below -30°C chasing light that never quite arrives.",
     process: "The cold made standard filmmaking impossible. Everything was improvised — gaffers' tape fails at -25, batteries die in minutes. Scarcity became the aesthetic.",
-    loopUrl: "/video.gif",
+    loopUrl: publicAsset("video.gif"),
     fullPieceUrl: "https://vimeo.com",
   },
   {
@@ -114,7 +117,7 @@ export const works: Work[] = [
     location: "Oslo, Norway",
     description: "A visual album companion for a jazz pianist's debut record on ECM. Nine pieces, nine single takes, one afternoon in a converted chapel.",
     process: "Bolex 16mm transferred to 4K. The constraint of film meant total commitment to each take — the camera had to be inside the music before pressing record.",
-    loopUrl: "/video.gif",
+    loopUrl: publicAsset("video.gif"),
     fullPieceUrl: "https://vimeo.com",
   },
   {
@@ -125,7 +128,7 @@ export const works: Work[] = [
     location: "Prague, Czech Republic",
     description: "A short essay film about the physics and mythology of light. Made while studying at FAMU. Part document, part daydream.",
     process: "Collaboration with a Czech cinematographer. The narration was written in Estonian and translated — something was gained in the friction.",
-    loopUrl: "/video.gif",
+    loopUrl: publicAsset("video.gif"),
     fullPieceUrl: "https://vimeo.com",
   },
   {
@@ -137,7 +140,7 @@ export const works: Work[] = [
     location: "Copenhagen, Denmark",
     description: "Editorial film for Vogue Scandinavia's summer issue. A model moves between interior and exterior — the threshold itself is the subject.",
     process: "Handheld, long lens, natural light only. The brief was 'soft power' and the team interpreted it architecturally.",
-    loopUrl: "/video.gif",
+    loopUrl: publicAsset("video.gif"),
     fullPieceUrl: "https://vimeo.com",
   },
   {
@@ -149,7 +152,7 @@ export const works: Work[] = [
     location: "Tallinn, Estonia",
     description: "A 12-minute installation piece made for the Kumu Art Museum's outdoor sculpture garden. Projected onto limestone at night during the summer festival.",
     process: "Created in response to the specific texture and history of the stone. Research-led — three months of reading about Baltic geology before picking up a camera.",
-    loopUrl: "/video.gif",
+    loopUrl: publicAsset("video.gif"),
     fullPieceUrl: "https://vimeo.com",
   },
 ];
