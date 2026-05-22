@@ -1,18 +1,19 @@
-import { useState, useEffect } from 'react';
-import './os9.css';
+import { useEffect, useState } from 'react';
+import { AnimatePresence } from 'framer-motion';
+import './styles.css';
 import { MenuBar } from './components/MenuBar';
-import { DesktopIcon } from './components/DesktopIcon';
+import { DesktopIcon, IconClickOrigin } from './components/DesktopIcon';
 import { FinderWindow } from './components/FinderWindow';
 import { QuickTimeWindow } from './components/QuickTimeWindow';
 import { SimpleTextWindow } from './components/SimpleTextWindow';
 import { HDDialog } from './components/HDDialog';
-import { FolderIcon, SimpleTextIcon, DiskIcon } from './components/Icons';
+import { FolderIcon, TextDocIcon, HDIcon } from './components/Icons';
 import { works, Work } from './data/works';
 import { contactText, readMeText } from './data/content';
 
 type WindowState =
   | { type: 'none' }
-  | { type: 'finder'; selectedWork?: Work }
+  | { type: 'finder' }
   | { type: 'quicktime'; work: Work }
   | { type: 'contact' }
   | { type: 'readme' }
@@ -23,116 +24,107 @@ type SelectedIcon = 'works' | 'contact' | 'readme' | 'hd' | null;
 export default function App() {
   const [windowState, setWindowState] = useState<WindowState>({ type: 'none' });
   const [selectedIcon, setSelectedIcon] = useState<SelectedIcon>(null);
+  const [origin, setOrigin] = useState<IconClickOrigin | null>(null);
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768);
+    const check = () => {
+      const vv = window.visualViewport;
+      const w = vv?.width ?? window.innerWidth;
+      const h = vv?.height ?? window.innerHeight;
+      setIsMobile(w < 768 || h < 640);
+    };
     check();
     window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
+    window.visualViewport?.addEventListener('resize', check);
+    return () => {
+      window.removeEventListener('resize', check);
+      window.visualViewport?.removeEventListener('resize', check);
+    };
   }, []);
 
-  function handleDesktopClick(icon: SelectedIcon) {
+  function openWindow(icon: SelectedIcon, clickOrigin: IconClickOrigin) {
+    // Click on currently-selected icon (except Finder) toggles it closed.
     if (selectedIcon === icon && windowState.type !== 'finder') {
       setSelectedIcon(null);
       setWindowState({ type: 'none' });
       return;
     }
 
+    setOrigin(clickOrigin);
     setSelectedIcon(icon);
+
     switch (icon) {
-      case 'works':
-        setWindowState({ type: 'finder' });
-        break;
-      case 'contact':
-        setWindowState({ type: 'contact' });
-        break;
-      case 'readme':
-        setWindowState({ type: 'readme' });
-        break;
-      case 'hd':
-        setWindowState({ type: 'hd' });
-        break;
+      case 'works':   setWindowState({ type: 'finder' }); break;
+      case 'contact': setWindowState({ type: 'contact' }); break;
+      case 'readme':  setWindowState({ type: 'readme' }); break;
+      case 'hd':      setWindowState({ type: 'hd' }); break;
     }
   }
 
-  function handleSelectWork(work: Work) {
+  function openWorkFromFinder(work: Work, clickOrigin: IconClickOrigin) {
+    setOrigin(clickOrigin);
     setWindowState({ type: 'quicktime', work });
   }
 
-  function handleCloseQuicktime() {
+  function closeQuicktime() {
     setWindowState({ type: 'finder' });
   }
 
-  function handleCloseFinder() {
+  function closeAll() {
     setSelectedIcon(null);
     setWindowState({ type: 'none' });
   }
 
-  function handleCloseOther() {
-    setSelectedIcon(null);
-    setWindowState({ type: 'none' });
-  }
-
-  const showFinder = windowState.type === 'finder' || windowState.type === 'quicktime';
   const selectedWorkId = windowState.type === 'quicktime' ? windowState.work.id : undefined;
+  const finderVisible = windowState.type === 'finder' || windowState.type === 'quicktime';
 
   return (
-    <div
-      style={{
-        width: '100vw',
-        height: '100vh',
-        background: '#CCCCCC',
-        overflow: 'hidden',
-        position: 'relative',
-        userSelect: 'none',
-      }}
-    >
+    <>
       <MenuBar />
 
-      <div style={{ marginTop: 22, position: 'relative', width: '100%', height: 'calc(100vh - 22px)' }}>
-
-        {/* Selected Works folder — top-left */}
-        <div style={{ position: 'absolute', top: '8%', left: '4%' }}>
+      <div className="desktop">
+        {/* Selected Works folder */}
+        <div style={{ position: 'absolute', top: '6%', left: '3%' }}>
           <DesktopIcon
-            icon={<FolderIcon selected={selectedIcon === 'works'} />}
+            icon={<FolderIcon />}
             label="Selected Works"
             selected={selectedIcon === 'works'}
-            onClick={() => handleDesktopClick('works')}
+            onClick={(o) => openWindow('works', o)}
           />
         </div>
 
-        {/* Contact.txt — below Selected Works */}
-        <div style={{ position: 'absolute', top: 'calc(8% + 95px)', left: '4%' }}>
+        {/* Contact.txt */}
+        <div style={{ position: 'absolute', top: 'calc(6% + 110px)', left: '3%' }}>
           <DesktopIcon
-            icon={<SimpleTextIcon selected={selectedIcon === 'contact'} />}
+            icon={<TextDocIcon />}
             label="Contact.txt"
             selected={selectedIcon === 'contact'}
-            onClick={() => handleDesktopClick('contact')}
+            onClick={(o) => openWindow('contact', o)}
           />
         </div>
 
-        {/* Read Me — below Contact */}
-        <div style={{ position: 'absolute', top: 'calc(8% + 190px)', left: '4%' }}>
+        {/* Read Me */}
+        <div style={{ position: 'absolute', top: 'calc(6% + 220px)', left: '3%' }}>
           <DesktopIcon
-            icon={<SimpleTextIcon selected={selectedIcon === 'readme'} />}
+            icon={<TextDocIcon />}
             label="Read Me"
             selected={selectedIcon === 'readme'}
-            onClick={() => handleDesktopClick('readme')}
+            onClick={(o) => openWindow('readme', o)}
           />
         </div>
 
-        {/* Macintosh HD — top-right */}
-        <div style={{ position: 'absolute', top: '8%', right: '4%' }}>
+        {/* Macintosh HD */}
+        <div style={{ position: 'absolute', top: '6%', right: '3%' }}>
           <DesktopIcon
-            icon={<DiskIcon selected={selectedIcon === 'hd'} />}
+            icon={<HDIcon />}
             label="Macintosh HD"
             selected={selectedIcon === 'hd'}
-            onClick={() => handleDesktopClick('hd')}
+            onClick={(o) => openWindow('hd', o)}
           />
         </div>
 
-        {/* Atmospheric figure — bottom-right, kept within the desktop area below the menu bar */}
+        {/* Atmospheric figure */}
         <img
           src="/bg_extracted.png"
           alt=""
@@ -141,65 +133,68 @@ export default function App() {
             position: 'absolute',
             bottom: 0,
             right: 0,
-            maxWidth: isMobile ? '58vw' : 'min(30vw, 380px)',
-            maxHeight: isMobile ? '52vh' : 'min(62vh, 72%)',
+            maxWidth: isMobile ? '58vw' : 'min(40vw, 500px)',
+            maxHeight: isMobile ? '52vh' : 'min(82vh, 90%)',
             width: 'auto',
             height: 'auto',
             objectFit: 'contain',
             objectPosition: 'bottom right',
             display: 'block',
-            opacity: 0.85,
+            opacity: 0.82,
             mixBlendMode: 'multiply',
             pointerEvents: 'none',
-            zIndex: 0,
+            zIndex: 1,
           }}
         />
       </div>
 
-      {/* Finder window */}
-      {showFinder && (
-        <FinderWindow
-          works={works}
-          onClose={handleCloseFinder}
-          onSelectWork={handleSelectWork}
-          selectedWorkId={selectedWorkId}
-          isMobile={isMobile}
-        />
-      )}
+      <AnimatePresence>
+        {finderVisible && (
+          <FinderWindow
+            key="finder"
+            works={works}
+            onClose={closeAll}
+            onSelectWork={openWorkFromFinder}
+            selectedWorkId={selectedWorkId}
+            isMobile={isMobile}
+            origin={origin}
+          />
+        )}
 
-      {/* QuickTime window */}
-      {windowState.type === 'quicktime' && (
-        <QuickTimeWindow
-          work={windowState.work}
-          onClose={handleCloseQuicktime}
-          isMobile={isMobile}
-        />
-      )}
+        {windowState.type === 'quicktime' && (
+          <QuickTimeWindow
+            key={`qt-${windowState.work.id}`}
+            work={windowState.work}
+            onClose={closeQuicktime}
+            isMobile={isMobile}
+            origin={origin}
+          />
+        )}
 
-      {/* Contact */}
-      {windowState.type === 'contact' && (
-        <SimpleTextWindow
-          title="Contact.txt"
-          content={contactText}
-          onClose={handleCloseOther}
-          isMobile={isMobile}
-        />
-      )}
+        {windowState.type === 'contact' && (
+          <SimpleTextWindow
+            key="contact"
+            title="Contact.txt"
+            content={contactText}
+            onClose={closeAll}
+            isMobile={isMobile}
+            origin={origin}
+          />
+        )}
 
-      {/* Read Me */}
-      {windowState.type === 'readme' && (
-        <SimpleTextWindow
-          title="Read Me"
-          content={readMeText}
-          onClose={handleCloseOther}
-          isMobile={isMobile}
-        />
-      )}
+        {windowState.type === 'readme' && (
+          <SimpleTextWindow
+            key="readme"
+            title="Read Me"
+            content={readMeText}
+            onClose={closeAll}
+            isMobile={isMobile}
+            origin={origin}
+          />
+        )}
 
-      {/* Macintosh HD Easter egg */}
-      {windowState.type === 'hd' && (
-        <HDDialog onClose={handleCloseOther} />
-      )}
-    </div>
+        {windowState.type === 'hd' && <HDDialog key="hd" onClose={closeAll} />}
+      </AnimatePresence>
+    </>
   );
 }

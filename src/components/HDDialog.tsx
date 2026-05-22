@@ -1,3 +1,4 @@
+import { motion } from 'framer-motion';
 import { CautionIcon } from './Icons';
 
 interface HDDialogProps {
@@ -6,34 +7,33 @@ interface HDDialogProps {
 
 export function HDDialog({ onClose }: HDDialogProps) {
   return (
-    <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 500,
-      }}
+    <motion.div
+      className="dialog-overlay"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.15 }}
     >
-      <div className="os9-dialog" style={{ width: 320 }}>
-        <div className="os9-dialog-body">
-          <div className="os9-dialog-icon">
-            <CautionIcon />
-          </div>
-          <div className="os9-dialog-text">
-            You cannot open this disk because Sharing Setup has not been configured.
-          </div>
+      <motion.div
+        className="dialog"
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+      >
+        <div className="dialog-icon">
+          <CautionIcon />
         </div>
-        <div className="os9-dialog-footer">
-          <button className="os9-button os9-button-default" onClick={onClose}>
+        <h2 className="dialog-title">Sharing is not configured</h2>
+        <p className="dialog-text">
+          You cannot open this disk because Sharing Setup has not been configured.
+        </p>
+        <div className="dialog-actions">
+          <button className="btn btn--primary" onClick={onClose}>
             OK
           </button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

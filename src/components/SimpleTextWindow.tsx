@@ -1,45 +1,57 @@
+import { motion } from 'framer-motion';
+import { IconClickOrigin } from './DesktopIcon';
+import { makeTransformOrigin, springOpen } from '../lib/animation';
+
 interface SimpleTextWindowProps {
   title: string;
   content: string;
   onClose: () => void;
   isMobile: boolean;
+  origin: IconClickOrigin | null;
 }
 
-export function SimpleTextWindow({ title, content, onClose, isMobile }: SimpleTextWindowProps) {
+const WIN_WIDTH = 480;
+const WIN_HEIGHT = 380;
+
+export function SimpleTextWindow({
+  title,
+  content,
+  onClose,
+  isMobile,
+  origin,
+}: SimpleTextWindowProps) {
   const windowStyle: React.CSSProperties = isMobile
     ? {}
     : {
         top: '50%',
         left: '50%',
-        transform: 'translate(-50%, -50%)',
-        width: 400,
-        height: 300,
+        translate: '-50% -50%',
+        width: WIN_WIDTH,
+        height: WIN_HEIGHT,
       };
 
   return (
-    <div
-      className={`os9-window${isMobile ? ' os9-window-fullscreen' : ''}`}
-      style={windowStyle}
+    <motion.div
+      className={`window text-window${isMobile ? ' window--fullscreen' : ''}`}
+      style={{
+        ...windowStyle,
+        transformOrigin: isMobile ? '50% 50%' : makeTransformOrigin(origin, WIN_WIDTH, WIN_HEIGHT),
+      }}
+      initial={{ scale: 0.85, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      exit={{ scale: 0.9, opacity: 0 }}
+      transition={springOpen}
     >
-      {/* Title bar */}
-      <div className="os9-titlebar os9-titlebar-active">
-        <button className="os9-closebox" onClick={onClose} aria-label="Close">
-          ×
-        </button>
-        <span className="os9-titlebar-title">{title}</span>
+      <div className="window-titlebar">
+        <div className="traffic-lights">
+          <button className="tl tl--close" onClick={onClose} aria-label="Close" />
+          <span className="tl tl--min tl--dim" aria-hidden="true" />
+          <span className="tl tl--zoom tl--dim" aria-hidden="true" />
+        </div>
+        <span className="window-titlebar-title">{title}</span>
       </div>
 
-      {/* Content */}
-      <div
-        className="os9-window-content os9-scrollable"
-        style={{
-          height: isMobile ? 'calc(100vh - 22px - 19px)' : 'calc(300px - 19px)',
-          overflow: 'auto',
-          background: '#FFFFFF',
-        }}
-      >
-        <div className="os9-window-body">{content}</div>
-      </div>
-    </div>
+      <div className="window-body">{content}</div>
+    </motion.div>
   );
 }

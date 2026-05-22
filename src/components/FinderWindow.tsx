@@ -1,63 +1,110 @@
+import { motion } from 'framer-motion';
 import { Work } from '../data/works';
-import { MovIcon } from './Icons';
+import { MovIcon, SidebarFolderIcon, SidebarAirDropIcon, SidebarHDDIcon } from './Icons';
+import { IconClickOrigin } from './DesktopIcon';
+import { makeTransformOrigin, springOpen } from '../lib/animation';
 
 interface FinderWindowProps {
   works: Work[];
   onClose: () => void;
-  onSelectWork: (work: Work) => void;
+  onSelectWork: (work: Work, origin: IconClickOrigin) => void;
   selectedWorkId?: string;
   isMobile: boolean;
+  origin: IconClickOrigin | null;
 }
 
-export function FinderWindow({ works, onClose, onSelectWork, selectedWorkId, isMobile }: FinderWindowProps) {
+const WIN_WIDTH = 760;
+const WIN_HEIGHT = 520;
+
+export function FinderWindow({
+  works,
+  onClose,
+  onSelectWork,
+  selectedWorkId,
+  isMobile,
+  origin,
+}: FinderWindowProps) {
   const windowStyle: React.CSSProperties = isMobile
     ? {}
     : {
         top: '50%',
         left: '50%',
-        transform: 'translate(-50%, -50%)',
-        width: 600,
-        height: 480,
+        translate: '-50% -50%',
+        width: WIN_WIDTH,
+        height: WIN_HEIGHT,
       };
 
   return (
-    <div
-      className={`os9-window${isMobile ? ' os9-window-fullscreen' : ''}`}
-      style={windowStyle}
+    <motion.div
+      className={`window${isMobile ? ' window--fullscreen' : ''}`}
+      style={{
+        ...windowStyle,
+        transformOrigin: isMobile ? '50% 50%' : makeTransformOrigin(origin, WIN_WIDTH, WIN_HEIGHT),
+      }}
+      initial={{ scale: 0.82, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      exit={{ scale: 0.9, opacity: 0 }}
+      transition={springOpen}
     >
-      {/* Title bar */}
-      <div className="os9-titlebar os9-titlebar-active">
-        <button className="os9-closebox" onClick={onClose} aria-label="Close">
-          ×
-        </button>
-        <span className="os9-titlebar-title">Selected Works</span>
+      {/* Title bar with traffic lights */}
+      <div className="window-titlebar">
+        <div className="traffic-lights">
+          <button className="tl tl--close" onClick={onClose} aria-label="Close" />
+          <span className="tl tl--min tl--dim" aria-hidden="true" />
+          <span className="tl tl--zoom tl--dim" aria-hidden="true" />
+        </div>
+        <span className="window-titlebar-title">Selected Works</span>
       </div>
 
-      {/* Icon grid */}
-      <div
-        className="os9-window-content os9-scrollable"
-        style={{ height: isMobile ? 'calc(100vh - 22px - 19px - 18px)' : 'calc(480px - 19px - 18px)', overflow: 'auto' }}
-      >
-        <div className="os9-finder-grid">
-          {works.map((work) => (
-            <div
-              key={work.id}
-              className={`os9-finder-item${selectedWorkId === work.id ? ' selected' : ''}`}
-              onClick={() => onSelectWork(work)}
-            >
-              <div className="os9-icon">
-                <MovIcon selected={selectedWorkId === work.id} />
+      <div className="finder">
+        {/* Sidebar */}
+        <aside className="finder-sidebar">
+          <div className="finder-sidebar-section">Favorites</div>
+          <div className="finder-sidebar-item">
+            <SidebarAirDropIcon /> AirDrop
+          </div>
+          <div className="finder-sidebar-item">
+            <SidebarFolderIcon /> Recents
+          </div>
+          <div className="finder-sidebar-item is-active">
+            <SidebarFolderIcon /> Selected Works
+          </div>
+          <div className="finder-sidebar-item">
+            <SidebarFolderIcon /> Documents
+          </div>
+
+          <div className="finder-sidebar-section" style={{ marginTop: 10 }}>
+            Locations
+          </div>
+          <div className="finder-sidebar-item">
+            <SidebarHDDIcon /> Macintosh HD
+          </div>
+        </aside>
+
+        {/* Main pane */}
+        <div className="finder-main">
+          <div className="finder-toolbar">
+            <span>Selected Works</span>
+          </div>
+
+          <div className="finder-grid">
+            {works.map((work) => (
+              <div
+                key={work.id}
+                className={`finder-item${selectedWorkId === work.id ? ' is-selected' : ''}`}
+                onClick={(e) => onSelectWork(work, { x: e.clientX, y: e.clientY })}
+              >
+                <div className="finder-item-glyph">
+                  <MovIcon size={48} />
+                </div>
+                <span className="finder-item-label">{work.filename}</span>
               </div>
-              <span className="os9-icon-label">{work.filename}</span>
-            </div>
-          ))}
+            ))}
+          </div>
+
+          <div className="finder-statusbar">{works.length} items</div>
         </div>
       </div>
-
-      {/* Status bar */}
-      <div className="os9-finder-statusbar">
-        <span>{works.length} items</span>
-      </div>
-    </div>
+    </motion.div>
   );
 }
