@@ -1,0 +1,631 @@
+/* Mac OS 9 Chrome Styles */
+
+/* ChicagoFLF (Chicago equivalent) and Geneva via cdnfonts. These URLs return
+   CSS stylesheets containing @font-face directives, so we @import them. */
+@import url('https://fonts.cdnfonts.com/css/chicago-flf');
+@import url('https://fonts.cdnfonts.com/css/geneva-2');
+
+:root {
+  --os9-platinum: #CCCCCC;
+  --os9-platinum-light: #DDDDDD;
+  --os9-platinum-dark: #AAAAAA;
+  --os9-platinum-darker: #888888;
+  --os9-highlight: #3366CC;
+  --os9-highlight-text: #FFFFFF;
+  --os9-text: #000000;
+  --os9-white: #FFFFFF;
+  --os9-titlebar-height: 19px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  font-family: 'Geneva', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 9px;
+  -webkit-font-smoothing: none;
+  font-smooth: never;
+  image-rendering: pixelated;
+}
+
+/* ========================
+   MENU BAR
+   ======================== */
+.os9-menubar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 22px;
+  background: var(--os9-platinum);
+  border-bottom: 1px solid var(--os9-platinum-dark);
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  z-index: 9999;
+  font-family: 'ChicagoFLF', 'Chicago', 'Charcoal', system-ui, sans-serif;
+  font-size: 13px;
+  user-select: none;
+  gap: 0;
+  box-shadow: 0 1px 0 var(--os9-platinum-light) inset;
+}
+
+.os9-menubar-item {
+  padding: 2px 8px;
+  cursor: default;
+  white-space: nowrap;
+  font-size: 13px;
+  line-height: 18px;
+  border-radius: 2px;
+}
+
+.os9-menubar-item:hover {
+  background: var(--os9-highlight);
+  color: var(--os9-white);
+}
+
+.os9-menubar-apple {
+  font-size: 16px;
+  padding: 0 10px 0 6px;
+  line-height: 20px;
+}
+
+/* ========================
+   WINDOW BASE
+   ======================== */
+.os9-window {
+  position: fixed;
+  border: 1px solid var(--os9-platinum-darker);
+  background: var(--os9-platinum);
+  box-shadow:
+    1px 1px 0 var(--os9-white) inset,
+    -1px -1px 0 var(--os9-platinum-dark) inset,
+    2px 2px 8px rgba(0,0,0,0.4);
+  z-index: 100;
+}
+
+/* ========================
+   TITLE BAR (pinstripe)
+   ======================== */
+.os9-titlebar {
+  height: 19px;
+  background: repeating-linear-gradient(
+    180deg,
+    #BBBBBB 0px,
+    #BBBBBB 1px,
+    #CCCCCC 1px,
+    #CCCCCC 2px
+  );
+  border-bottom: 1px solid var(--os9-platinum-dark);
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  cursor: default;
+  user-select: none;
+  position: relative;
+}
+
+.os9-titlebar-active {
+  background: repeating-linear-gradient(
+    180deg,
+    #999999 0px,
+    #999999 1px,
+    #BBBBBB 1px,
+    #BBBBBB 2px
+  );
+}
+
+.os9-titlebar-title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'ChicagoFLF', 'Chicago', 'Charcoal', system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: normal;
+  color: var(--os9-text);
+  white-space: nowrap;
+  pointer-events: none;
+  /* Platinum band interrupts the pinstripes behind the title — authentic OS 9 */
+  background: var(--os9-platinum);
+  padding: 0 8px;
+  line-height: 17px;
+}
+
+/* ========================
+   CLOSE BOX
+   ======================== */
+.os9-closebox {
+  width: 13px;
+  height: 13px;
+  background: var(--os9-platinum);
+  border: 1px solid var(--os9-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow:
+    1px 1px 0 var(--os9-white) inset,
+    -1px -1px 0 var(--os9-platinum-dark) inset;
+  font-size: 11px;
+  line-height: 1;
+  z-index: 1;
+  padding: 0;
+  /* Default OS 9 close box is just a bevel — the X only appears on hover */
+  color: transparent;
+}
+
+.os9-closebox:hover {
+  background: #BBBBBB;
+  color: var(--os9-text);
+}
+
+.os9-closebox:active {
+  background: #999999;
+  color: var(--os9-text);
+  box-shadow:
+    -1px -1px 0 var(--os9-white) inset,
+    1px 1px 0 var(--os9-platinum-dark) inset;
+}
+
+/* ========================
+   WINDOW CONTENT
+   ======================== */
+.os9-window-content {
+  background: var(--os9-white);
+  overflow: auto;
+}
+
+.os9-window-body {
+  padding: 12px;
+  font-family: 'Geneva', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--os9-text);
+  white-space: pre-wrap;
+}
+
+/* ========================
+   FINDER WINDOW
+   ======================== */
+.os9-finder-statusbar {
+  height: 18px;
+  background: var(--os9-platinum);
+  border-top: 1px solid var(--os9-platinum-dark);
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  font-family: 'Geneva', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 11px;
+  color: #333;
+  gap: 8px;
+  box-shadow: 0 1px 0 var(--os9-white) inset;
+}
+
+.os9-finder-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0;
+  padding: 8px;
+  background: var(--os9-white);
+}
+
+.os9-finder-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 4px;
+  cursor: pointer;
+  border-radius: 2px;
+  gap: 4px;
+  min-width: 0;
+}
+
+.os9-finder-item:hover .os9-icon-label {
+  background: var(--os9-highlight);
+  color: var(--os9-white);
+}
+
+.os9-finder-item.selected .os9-icon-label {
+  background: var(--os9-highlight);
+  color: var(--os9-white);
+}
+
+/* ========================
+   DESKTOP ICON
+   ======================== */
+.os9-desktop-icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  gap: 3px;
+  width: 72px;
+}
+
+.os9-desktop-icon:hover .os9-icon-label,
+.os9-desktop-icon.selected .os9-icon-label {
+  background: var(--os9-highlight);
+  color: var(--os9-white);
+}
+
+.os9-icon-label {
+  font-family: 'Geneva', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 11px;
+  color: var(--os9-text);
+  text-align: center;
+  padding: 1px 3px;
+  max-width: 72px;
+  word-break: break-word;
+  line-height: 1.3;
+  border-radius: 1px;
+}
+
+/* Icon graphic */
+.os9-icon {
+  width: 32px;
+  height: 32px;
+  image-rendering: pixelated;
+  flex-shrink: 0;
+}
+
+/* ========================
+   SCROLLBAR OS9 STYLE
+   ======================== */
+.os9-window-content::-webkit-scrollbar {
+  width: 15px;
+  height: 15px;
+}
+
+.os9-window-content::-webkit-scrollbar-track {
+  background: var(--os9-platinum);
+  border-left: 1px solid var(--os9-platinum-dark);
+}
+
+.os9-window-content::-webkit-scrollbar-thumb {
+  background: var(--os9-platinum);
+  border: 1px solid var(--os9-platinum-dark);
+  box-shadow: 1px 1px 0 var(--os9-white) inset;
+}
+
+/* ========================
+   QUICKTIME PLAYER
+   ======================== */
+.os9-qt-window {
+  background: #2A2A2A;
+  border: 1px solid #111;
+  border-radius: 8px;
+  box-shadow:
+    0 2px 0 rgba(255,255,255,0.15) inset,
+    0 0 0 1px #000,
+    2px 2px 12px rgba(0,0,0,0.6);
+  overflow: hidden;
+}
+
+.os9-qt-titlebar {
+  height: 19px;
+  background: linear-gradient(180deg, #4A4A4A 0%, #2E2E2E 100%);
+  border-bottom: 1px solid #111;
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+  cursor: default;
+  user-select: none;
+  position: relative;
+  border-radius: 8px 8px 0 0;
+}
+
+.os9-qt-titlebar-title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'ChicagoFLF', 'Chicago', 'Charcoal', system-ui, sans-serif;
+  font-size: 11px;
+  color: #CCCCCC;
+  white-space: nowrap;
+}
+
+.os9-qt-closebox {
+  width: 12px;
+  height: 12px;
+  background: radial-gradient(circle at 40% 40%, #FF6B6B, #CC0000);
+  border: 1px solid #990000;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  z-index: 1;
+}
+
+.os9-qt-closebox:hover::after {
+  content: '×';
+  font-size: 9px;
+  color: #660000;
+  line-height: 1;
+}
+
+.os9-qt-video {
+  background: #000;
+  width: 100%;
+  aspect-ratio: 16/9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.os9-qt-video video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Brushed metal controller */
+.os9-qt-controller {
+  height: 40px;
+  background: linear-gradient(
+    180deg,
+    #5A5A5A 0%,
+    #3A3A3A 30%,
+    #2A2A2A 50%,
+    #3A3A3A 70%,
+    #4A4A4A 100%
+  );
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 8px;
+  border-top: 1px solid #111;
+  border-bottom: 1px solid #111;
+}
+
+.os9-qt-play-btn {
+  width: 28px;
+  height: 28px;
+  background: radial-gradient(circle at 40% 35%, #6A6A6A, #2A2A2A);
+  border: 1px solid #111;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.2) inset;
+  color: #CCCCCC;
+  font-size: 8px;
+}
+
+.os9-qt-play-btn:hover {
+  background: radial-gradient(circle at 40% 35%, #7A7A7A, #3A3A3A);
+}
+
+.os9-qt-scrubber {
+  flex: 1;
+  height: 6px;
+  background: #111;
+  border-radius: 3px;
+  border: 1px solid #000;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.5) inset;
+  position: relative;
+  overflow: visible;
+}
+
+.os9-qt-scrubber-thumb {
+  width: 10px;
+  height: 12px;
+  background: linear-gradient(180deg, #AAAAAA, #777777);
+  border: 1px solid #555;
+  border-radius: 2px;
+  position: absolute;
+  top: -4px;
+  left: 4px;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.3) inset;
+}
+
+.os9-qt-time {
+  font-family: 'Geneva', 'Helvetica Neue', monospace, sans-serif;
+  font-size: 9px;
+  color: #999;
+  width: 48px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.os9-qt-volume {
+  width: 18px;
+  height: 18px;
+  background: radial-gradient(circle at 40% 40%, #5A5A5A, #2A2A2A);
+  border: 1px solid #111;
+  border-radius: 50%;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* QT Metadata panel */
+.os9-qt-meta {
+  background: var(--os9-platinum);
+  padding: 12px 14px;
+  font-family: 'Geneva', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 12px;
+  color: var(--os9-text);
+  overflow-y: auto;
+  border-top: 1px solid var(--os9-platinum-dark);
+}
+
+.os9-qt-meta-title {
+  font-family: 'ChicagoFLF', 'Chicago', 'Charcoal', system-ui, sans-serif;
+  font-size: 16px;
+  font-weight: normal;
+  margin-bottom: 8px;
+  line-height: 1.2;
+}
+
+.os9-qt-meta-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 3px;
+  font-size: 11px;
+}
+
+.os9-qt-meta-key {
+  color: #555;
+  width: 70px;
+  flex-shrink: 0;
+}
+
+.os9-qt-meta-val {
+  color: var(--os9-text);
+}
+
+.os9-qt-meta-divider {
+  height: 1px;
+  background: var(--os9-platinum-dark);
+  margin: 8px 0;
+}
+
+.os9-qt-meta-label {
+  font-size: 10px;
+  color: #555;
+  margin-bottom: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.os9-qt-meta-para {
+  font-size: 11px;
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+
+.os9-qt-watch-link {
+  display: inline-block;
+  font-size: 11px;
+  color: var(--os9-highlight);
+  text-decoration: underline;
+  cursor: pointer;
+  margin-top: 4px;
+}
+
+.os9-qt-watch-link:hover {
+  color: #1144AA;
+}
+
+/* ========================
+   ERROR / ALERT DIALOG
+   ======================== */
+.os9-dialog {
+  background: var(--os9-platinum);
+  border: 1px solid var(--os9-platinum-darker);
+  box-shadow:
+    1px 1px 0 var(--os9-white) inset,
+    -1px -1px 0 var(--os9-platinum-dark) inset,
+    2px 2px 8px rgba(0,0,0,0.4);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.os9-dialog-body {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.os9-dialog-icon {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+}
+
+.os9-dialog-text {
+  font-family: 'Geneva', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--os9-text);
+  padding-top: 2px;
+}
+
+.os9-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* OS9 button */
+.os9-button {
+  font-family: 'ChicagoFLF', 'Chicago', 'Charcoal', system-ui, sans-serif;
+  font-size: 12px;
+  background: var(--os9-platinum);
+  border: 1px solid var(--os9-text);
+  padding: 3px 16px;
+  cursor: pointer;
+  box-shadow:
+    1px 1px 0 var(--os9-white) inset,
+    -1px -1px 0 var(--os9-platinum-dark) inset;
+  min-width: 64px;
+  text-align: center;
+  user-select: none;
+}
+
+.os9-button:hover {
+  background: #BBBBBB;
+}
+
+.os9-button:active {
+  box-shadow:
+    -1px -1px 0 var(--os9-white) inset,
+    1px 1px 0 var(--os9-platinum-dark) inset;
+}
+
+.os9-button-default {
+  border: 2px solid var(--os9-text);
+  box-shadow:
+    1px 1px 0 var(--os9-white) inset,
+    -1px -1px 0 var(--os9-platinum-dark) inset;
+}
+
+/* ========================
+   SCROLLBAR IN FINDER
+   ======================== */
+.os9-scrollable::-webkit-scrollbar {
+  width: 15px;
+}
+.os9-scrollable::-webkit-scrollbar-track {
+  background: var(--os9-platinum-light);
+  border-left: 1px solid var(--os9-platinum-dark);
+}
+.os9-scrollable::-webkit-scrollbar-thumb {
+  background: var(--os9-platinum);
+  border: 1px solid var(--os9-platinum-dark);
+  box-shadow: 1px 1px 0 var(--os9-white) inset;
+}
+
+/* ========================
+   MOBILE ADJUSTMENTS
+   ======================== */
+@media (max-width: 767px) {
+  .os9-finder-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .os9-window-fullscreen {
+    position: fixed !important;
+    top: 22px !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    height: calc(100vh - 22px) !important;
+    transform: none !important;
+    border-radius: 0;
+  }
+
+  .os9-qt-window.os9-window-fullscreen {
+    border-radius: 0;
+  }
+}
