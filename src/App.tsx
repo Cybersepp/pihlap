@@ -90,7 +90,7 @@ export default function App() {
     >
       <MenuBar />
 
-      <div style={{ paddingTop: 22, position: 'relative', width: '100%', height: 'calc(100% - 22px)' }}>
+      <div style={{ marginTop: 22, position: 'relative', width: '100%', height: 'calc(100vh - 22px)' }}>
 
         {/* Selected Works folder — top-left */}
         <div style={{ position: 'absolute', top: '8%', left: '4%' }}>
@@ -132,30 +132,28 @@ export default function App() {
           />
         </div>
 
-        {/* Atmospheric figure — bottom-right */}
-        <div
+        {/* Atmospheric figure — bottom-right, kept within the desktop area below the menu bar */}
+        <img
+          src="/bg_extracted.png"
+          alt=""
+          draggable={false}
           style={{
             position: 'absolute',
             bottom: 0,
             right: 0,
-            width: isMobile ? '55vw' : '38vw',
-            maxWidth: 520,
+            maxWidth: isMobile ? '58vw' : 'min(30vw, 380px)',
+            maxHeight: isMobile ? '52vh' : 'min(62vh, 72%)',
+            width: 'auto',
+            height: 'auto',
+            objectFit: 'contain',
+            objectPosition: 'bottom right',
+            display: 'block',
+            opacity: 0.85,
+            mixBlendMode: 'multiply',
             pointerEvents: 'none',
             zIndex: 0,
           }}
-        >
-          <img
-            src="/bg_extracted.png"
-            alt=""
-            style={{
-              width: '100%',
-              display: 'block',
-              opacity: 0.85,
-              mixBlendMode: 'multiply',
-            }}
-            draggable={false}
-          />
-        </div>
+        />
       </div>
 
       {/* Finder window */}
