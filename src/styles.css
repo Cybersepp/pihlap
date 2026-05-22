@@ -742,7 +742,7 @@ button { font: inherit; color: inherit; }
 .qt-meta::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.22); background-clip: padding-box; border: 2px solid transparent; }
 
 /* ============================================================
-   MOBILE
+   MOBILE / TOUCH
    ============================================================ */
 .window--fullscreen {
   top: var(--menubar-height) !important;
@@ -753,12 +753,72 @@ button { font: inherit; color: inherit; }
   height: calc(100vh - var(--menubar-height)) !important;
   transform: none !important;
   border-radius: 0;
+  /* On mobile the window is the full viewport — no need for outline */
+  outline: none;
+}
+
+/* Touch devices have no hover, so reveal the QT controls permanently */
+@media (hover: none) {
+  .qt-controls {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Larger tap target around the 12px traffic light, without changing visuals */
+@media (hover: none), (max-width: 767px) {
+  .tl {
+    position: relative;
+  }
+  .tl::before {
+    content: '';
+    position: absolute;
+    inset: -14px;
+  }
 }
 
 @media (max-width: 767px) {
-  .finder { grid-template-columns: 0 1fr; }
+  /* Finder: collapse to single column when sidebar is hidden */
+  .finder {
+    grid-template-columns: 1fr;
+  }
   .finder-sidebar { display: none; }
-  .finder-grid { grid-template-columns: repeat(3, 1fr); }
-  .desktop-icon { width: 76px; }
-  .desktop-icon-glyph { width: 52px; height: 52px; }
+  .finder-grid {
+    grid-template-columns: repeat(3, 1fr);
+    padding: 10px;
+    gap: 4px;
+  }
+  .finder-item { padding: 12px 4px; }
+  .finder-item-glyph { width: 56px; height: 56px; }
+  .finder-item-label { font-size: 12.5px; }
+  .finder-toolbar { padding: 0 12px; font-size: 14px; }
+
+  /* Desktop icons */
+  .desktop-icon { width: 78px; }
+  .desktop-icon-glyph { width: 54px; height: 54px; }
+  .desktop-icon-label { font-size: 13px; }
+
+  /* Menu bar: trim items so it fits on a phone */
+  .menubar { padding: 0 10px; gap: 0; }
+  .menubar-item { padding: 0 7px; font-size: 12.5px; }
+  .menubar-right { font-size: 12px; gap: 8px; }
+  /* Hide the rarely-used menus on phones */
+  .menubar-item[data-mobile-hide="true"] { display: none; }
+
+  /* SimpleText body — looser line, tighter horizontal padding */
+  .text-window .window-body {
+    padding: 22px 20px;
+    font-size: 14.5px;
+  }
+
+  /* QT meta panel — tighten desktop padding */
+  .qt-meta { padding: 18px 18px; }
+  .qt-meta-title { font-size: 20px; }
+  .qt-meta-grid { grid-template-columns: 78px 1fr; }
+}
+
+/* Very narrow phones (~360px and below): drop to 2-column Finder */
+@media (max-width: 380px) {
+  .finder-grid { grid-template-columns: repeat(2, 1fr); }
+  .menubar-right { display: none; }
 }
