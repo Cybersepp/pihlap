@@ -1,25 +1,23 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import './styles.css';
-import { MenuBar } from './components/MenuBar';
 import { DesktopIcon, IconClickOrigin } from './components/DesktopIcon';
 import { FinderWindow } from './components/FinderWindow';
 import { QuickTimeWindow } from './components/QuickTimeWindow';
 import { SimpleTextWindow } from './components/SimpleTextWindow';
-import { HDDialog } from './components/HDDialog';
-import { FolderIcon, TextDocIcon, HDIcon } from './components/Icons';
+import { FolderIcon, TextDocIcon } from './components/Icons';
 import { works, Work } from './data/works';
 import { contactText, readMeText } from './data/content';
+import { shouldUseMobileLayout } from './lib/device';
 
 type WindowState =
   | { type: 'none' }
   | { type: 'finder' }
   | { type: 'quicktime'; work: Work }
   | { type: 'contact' }
-  | { type: 'readme' }
-  | { type: 'hd' };
+  | { type: 'readme' };
 
-type SelectedIcon = 'works' | 'contact' | 'readme' | 'hd' | null;
+type SelectedIcon = 'works' | 'contact' | 'readme' | null;
 
 export default function App() {
   const [windowState, setWindowState] = useState<WindowState>({ type: 'none' });
@@ -29,10 +27,7 @@ export default function App() {
 
   useEffect(() => {
     const check = () => {
-      const vv = window.visualViewport;
-      const w = vv?.width ?? window.innerWidth;
-      const h = vv?.height ?? window.innerHeight;
-      setIsMobile(w < 768 || h < 640);
+      setIsMobile(shouldUseMobileLayout());
     };
     check();
     window.addEventListener('resize', check);
@@ -58,7 +53,6 @@ export default function App() {
       case 'works':   setWindowState({ type: 'finder' }); break;
       case 'contact': setWindowState({ type: 'contact' }); break;
       case 'readme':  setWindowState({ type: 'readme' }); break;
-      case 'hd':      setWindowState({ type: 'hd' }); break;
     }
   }
 
@@ -81,8 +75,6 @@ export default function App() {
 
   return (
     <>
-      <MenuBar />
-
       <div className="desktop">
         {/* Selected Works folder */}
         <div style={{ position: 'absolute', top: '6%', left: '3%' }}>
@@ -111,16 +103,6 @@ export default function App() {
             label="Read Me"
             selected={selectedIcon === 'readme'}
             onClick={(o) => openWindow('readme', o)}
-          />
-        </div>
-
-        {/* Macintosh HD */}
-        <div style={{ position: 'absolute', top: '6%', right: '3%' }}>
-          <DesktopIcon
-            icon={<HDIcon />}
-            label="Macintosh HD"
-            selected={selectedIcon === 'hd'}
-            onClick={(o) => openWindow('hd', o)}
           />
         </div>
 
@@ -192,8 +174,6 @@ export default function App() {
             origin={origin}
           />
         )}
-
-        {windowState.type === 'hd' && <HDDialog key="hd" onClose={closeAll} />}
       </AnimatePresence>
     </>
   );

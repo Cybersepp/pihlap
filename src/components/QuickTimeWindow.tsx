@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Work } from '../data/works';
 import { IconClickOrigin } from './DesktopIcon';
 import { makeTransformOrigin, springOpen } from '../lib/animation';
+import { getQuickTimeLayout } from '../lib/device';
 
 interface QuickTimeWindowProps {
   work: Work;
@@ -12,7 +13,7 @@ interface QuickTimeWindowProps {
 }
 
 const WIN_WIDTH = 720;
-const WIN_HEIGHT = 620;
+const WIN_HEIGHT = 720;
 
 function PlayIcon() {
   return (
@@ -59,22 +60,14 @@ export function QuickTimeWindow({ work, onClose, isMobile, origin }: QuickTimeWi
     }
   }
 
-  const windowStyle: React.CSSProperties = isMobile
-    ? {}
-    : {
-        top: '50%',
-        left: '50%',
-        translate: '-50% -50%',
-        width: WIN_WIDTH,
-        maxHeight: 'calc(100vh - 60px)',
-      };
+  const { clamped, videoHeight, videoWidth, windowStyle } = getQuickTimeLayout(WIN_WIDTH, WIN_HEIGHT);
 
   return (
     <motion.div
-      className={`window qt-window${isMobile ? ' window--fullscreen' : ''}`}
+      className="window qt-window"
       style={{
         ...windowStyle,
-        transformOrigin: isMobile ? '50% 50%' : makeTransformOrigin(origin, WIN_WIDTH, WIN_HEIGHT),
+        transformOrigin: isMobile ? '50% 50%' : makeTransformOrigin(origin, clamped.width, clamped.height),
         zIndex: 200,
       }}
       initial={{ scale: 0.85, opacity: 0 }}
@@ -92,7 +85,10 @@ export function QuickTimeWindow({ work, onClose, isMobile, origin }: QuickTimeWi
       </div>
 
       <div className="qt-body">
-        <div className="qt-video-wrap">
+        <div
+          className="qt-video-wrap"
+          style={{ height: videoHeight, width: videoWidth, maxWidth: '100%' }}
+        >
           {work.loopUrl ? (
             isGif ? (
               <img src={work.loopUrl} alt={work.title} />

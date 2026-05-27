@@ -38,27 +38,6 @@ export function FolderIcon({ size = 56 }: IconProps) {
   );
 }
 
-export function HDIcon({ size = 56 }: IconProps) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id="hd-body" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stopColor="#EAECEF" />
-          <stop offset="50%" stopColor="#CFD3D8" />
-          <stop offset="100%" stopColor="#A8AEB5" />
-        </linearGradient>
-      </defs>
-      <rect x="6" y="12" width="52" height="40" rx="8" fill="url(#hd-body)" />
-      <rect x="6" y="12" width="52" height="40" rx="8" fill="none" stroke="rgba(0,0,0,0.15)" />
-      {/* Inner darker panel */}
-      <rect x="14" y="20" width="36" height="20" rx="3" fill="rgba(0,0,0,0.08)" />
-      {/* Indicator dot */}
-      <circle cx="50" cy="46" r="1.4" fill="#4CC76A" />
-      <circle cx="50" cy="46" r="3" fill="rgba(76,199,106,0.25)" />
-    </svg>
-  );
-}
-
 export function TextDocIcon({ size = 56 }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">

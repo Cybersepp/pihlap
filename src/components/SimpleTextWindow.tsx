@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { IconClickOrigin } from './DesktopIcon';
 import { makeTransformOrigin, springOpen } from '../lib/animation';
+import { clampWindowSize, getPopupWindowStyle } from '../lib/device';
 
 interface SimpleTextWindowProps {
   title: string;
@@ -20,22 +21,15 @@ export function SimpleTextWindow({
   isMobile,
   origin,
 }: SimpleTextWindowProps) {
-  const windowStyle: React.CSSProperties = isMobile
-    ? {}
-    : {
-        top: '50%',
-        left: '50%',
-        translate: '-50% -50%',
-        width: WIN_WIDTH,
-        height: WIN_HEIGHT,
-      };
+  const clampedSize = clampWindowSize(WIN_WIDTH, WIN_HEIGHT);
+  const windowStyle = getPopupWindowStyle(WIN_WIDTH, WIN_HEIGHT);
 
   return (
     <motion.div
-      className={`window text-window${isMobile ? ' window--fullscreen' : ''}`}
+      className="window text-window"
       style={{
         ...windowStyle,
-        transformOrigin: isMobile ? '50% 50%' : makeTransformOrigin(origin, WIN_WIDTH, WIN_HEIGHT),
+        transformOrigin: isMobile ? '50% 50%' : makeTransformOrigin(origin, clampedSize.width, clampedSize.height),
       }}
       initial={{ scale: 0.85, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
