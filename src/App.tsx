@@ -80,7 +80,7 @@ export default function App() {
         <div style={{ position: 'absolute', top: '6%', left: '3%' }}>
           <DesktopIcon
             icon={<FolderIcon />}
-            label="Selected Works"
+            label="selected works"
             selected={selectedIcon === 'works'}
             onClick={(o) => openWindow('works', o)}
           />
@@ -90,7 +90,7 @@ export default function App() {
         <div style={{ position: 'absolute', top: 'calc(6% + 110px)', left: '3%' }}>
           <DesktopIcon
             icon={<TextDocIcon />}
-            label="Contact.txt"
+            label="contact.txt"
             selected={selectedIcon === 'contact'}
             onClick={(o) => openWindow('contact', o)}
           />
@@ -100,7 +100,7 @@ export default function App() {
         <div style={{ position: 'absolute', top: 'calc(6% + 220px)', left: '3%' }}>
           <DesktopIcon
             icon={<TextDocIcon />}
-            label="Read Me"
+            label="readme.txt"
             selected={selectedIcon === 'readme'}
             onClick={(o) => openWindow('readme', o)}
           />
@@ -108,7 +108,7 @@ export default function App() {
 
         {/* Atmospheric figure */}
         <img
-          src={`${import.meta.env.BASE_URL}bg_extracted.png`}
+          src={`${import.meta.env.BASE_URL}cropped_compressed.jpg`}
           alt=""
           draggable={false}
           style={{

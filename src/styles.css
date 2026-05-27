@@ -66,10 +66,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-  background:
-    radial-gradient(ellipse at 30% 0%, #fff7ec 0%, transparent 55%),
-    radial-gradient(ellipse at 100% 100%, #d9dbe4 0%, transparent 55%),
-    linear-gradient(180deg, var(--bg-grad-from), var(--bg-grad-to));
+  background: #EEEDE5;
   user-select: none;
 }
 
@@ -88,7 +85,7 @@ button { font: inherit; color: inherit; }
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  width: 84px;
+  width: 108px;
   cursor: pointer;
   padding: 4px;
   border-radius: 8px;
@@ -114,8 +111,7 @@ button { font: inherit; color: inherit; }
   line-height: 1.25;
   color: var(--text-primary);
   text-align: center;
-  max-width: 84px;
-  word-break: break-word;
+  white-space: nowrap;
   padding: 1px 6px;
   border-radius: 4px;
   /* Subtle text shadow so labels read on busy bg */
@@ -193,7 +189,17 @@ button { font: inherit; color: inherit; }
     inset 0 -1px 0 rgba(0, 0, 0, 0.08);
 }
 
-.tl--close  { background: var(--tl-red); }
+.tl--close {
+  background: var(--tl-red);
+  cursor: pointer;
+}
+
+.tl--close::before {
+  content: '';
+  position: absolute;
+  inset: -16px;
+}
+
 .tl--min    { background: var(--tl-yellow); }
 .tl--zoom   { background: var(--tl-green); }
 
@@ -236,48 +242,14 @@ button { font: inherit; color: inherit; }
    FINDER WINDOW
    ============================================================ */
 .finder {
-  display: grid;
-  grid-template-columns: 180px 1fr;
+  display: flex;
   flex: 1 1 auto;
   min-height: 0;
 }
 
-.finder-sidebar {
-  background: rgba(245, 245, 247, 0.55);
-  border-right: 0.5px solid rgba(0, 0, 0, 0.06);
-  padding: 12px 8px;
-  overflow-y: auto;
-}
-
-.finder-sidebar-section {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-tertiary);
-  letter-spacing: 0.02em;
-  padding: 8px 8px 4px;
-  text-transform: none;
-}
-
-.finder-sidebar-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 8px;
-  border-radius: 6px;
-  font-size: 13px;
-  color: var(--text-primary);
-  cursor: default;
-  font-weight: 500;
-}
-
-.finder-sidebar-item.is-active {
-  background: rgba(0, 0, 0, 0.07);
-  font-weight: 600;
-}
-
-.finder-sidebar-item .icon { color: var(--accent); }
-
 .finder-main {
+  flex: 1;
+  min-width: 0;
   background: rgba(255, 255, 255, 0.62);
   display: flex;
   flex-direction: column;
@@ -412,12 +384,23 @@ button { font: inherit; color: inherit; }
   display: block;
 }
 
+/* Transparent overlay that sits above the iframe but below the controls,
+   used to capture pointer activity over the video area (cross-origin iframes
+   don't bubble mouse events to the parent). */
+.qt-pointer-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: transparent;
+}
+
 /* Floating controls overlay at bottom of video */
 .qt-controls {
   position: absolute;
   left: 12px;
   right: 12px;
   bottom: 12px;
+  z-index: 2;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -437,6 +420,47 @@ button { font: inherit; color: inherit; }
 .qt-controls:focus-within {
   opacity: 1;
   transform: translateY(0);
+}
+
+/* In fullscreen, keep controls visible by default (no hover dependency)
+   and switch to a state-driven hide based on idle. */
+.qt-video-wrap.is-fullscreen .qt-controls,
+.qt-video-wrap.is-pseudo-fullscreen .qt-controls {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.qt-video-wrap[data-controls-hidden="true"] .qt-controls {
+  opacity: 0 !important;
+  transform: translateY(8px) !important;
+  pointer-events: none;
+}
+.qt-video-wrap[data-controls-hidden="true"] {
+  cursor: none;
+}
+
+/* Real fullscreen — force wrap to fill the screen, beating the inline
+   width/height props with !important. */
+.qt-video-wrap:fullscreen,
+.qt-video-wrap:-webkit-full-screen {
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: 100vw !important;
+  aspect-ratio: auto !important;
+  border-radius: 0 !important;
+}
+
+/* Pseudo-fullscreen fallback for browsers that won't fullscreen a div
+   (iPhone Safari). Same visual result, just without the real Fullscreen API. */
+.qt-video-wrap.is-pseudo-fullscreen {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: 100vw !important;
+  aspect-ratio: auto !important;
+  z-index: 9999;
+  border-radius: 0;
 }
 
 .qt-play {
@@ -488,6 +512,70 @@ button { font: inherit; color: inherit; }
   color: rgba(255, 255, 255, 0.85);
   cursor: pointer;
   flex-shrink: 0;
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+
+.qt-vol-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.qt-fs {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  flex-shrink: 0;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin-left: 2px;
+}
+.qt-fs:hover { color: #fff; }
+
+.qt-vol-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 56px;
+  height: 4px;
+  border-radius: 999px;
+  outline: none;
+  cursor: pointer;
+  background: linear-gradient(
+    to right,
+    #fff 0%,
+    #fff var(--vol-pct, 100%),
+    rgba(255, 255, 255, 0.25) var(--vol-pct, 100%),
+    rgba(255, 255, 255, 0.25) 100%
+  );
+}
+.qt-vol-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fff;
+  border: 0;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.qt-vol-slider::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fff;
+  border: 0;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.qt-vol-slider::-moz-range-track {
+  background: transparent;
 }
 
 /* Metadata panel */
@@ -706,24 +794,7 @@ button { font: inherit; color: inherit; }
   }
 }
 
-/* Larger tap target around the 12px traffic light, without changing visuals */
-@media (hover: none) {
-  .tl {
-    position: relative;
-  }
-  .tl::before {
-    content: '';
-    position: absolute;
-    inset: -14px;
-  }
-}
-
 @media (max-width: 767px) and (hover: none) {
-  /* Finder: collapse to single column when sidebar is hidden */
-  .finder {
-    grid-template-columns: 1fr;
-  }
-  .finder-sidebar { display: none; }
   .finder-grid {
     grid-template-columns: repeat(3, 1fr);
     padding: 10px;
@@ -735,7 +806,7 @@ button { font: inherit; color: inherit; }
   .finder-toolbar { padding: 0 12px; font-size: 14px; }
 
   /* Desktop icons */
-  .desktop-icon { width: 78px; }
+  .desktop-icon { width: 108px; }
   .desktop-icon-glyph { width: 54px; height: 54px; }
   .desktop-icon-label { font-size: 13px; }
 

@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { Work } from '../data/works';
-import { MovIcon, SidebarFolderIcon, SidebarAirDropIcon, SidebarHDDIcon } from './Icons';
+import { MovIcon } from './Icons';
 import { IconClickOrigin } from './DesktopIcon';
 import { makeTransformOrigin, springOpen } from '../lib/animation';
 import { clampWindowSize, getPopupWindowStyle } from '../lib/device';
@@ -51,31 +51,6 @@ export function FinderWindow({
       </div>
 
       <div className="finder">
-        {/* Sidebar */}
-        <aside className="finder-sidebar">
-          <div className="finder-sidebar-section">Favorites</div>
-          <div className="finder-sidebar-item">
-            <SidebarAirDropIcon /> AirDrop
-          </div>
-          <div className="finder-sidebar-item">
-            <SidebarFolderIcon /> Recents
-          </div>
-          <div className="finder-sidebar-item is-active">
-            <SidebarFolderIcon /> Selected Works
-          </div>
-          <div className="finder-sidebar-item">
-            <SidebarFolderIcon /> Documents
-          </div>
-
-          <div className="finder-sidebar-section" style={{ marginTop: 10 }}>
-            Locations
-          </div>
-          <div className="finder-sidebar-item">
-            <SidebarHDDIcon /> Macintosh HD
-          </div>
-        </aside>
-
-        {/* Main pane */}
         <div className="finder-main">
           <div className="finder-toolbar">
             <span>Selected Works</span>
@@ -91,7 +66,7 @@ export function FinderWindow({
                 <div className="finder-item-glyph">
                   <MovIcon size={48} />
                 </div>
-                <span className="finder-item-label">{work.filename}</span>
+                <span className="finder-item-label">{work.title}</span>
               </div>
             ))}
           </div>
