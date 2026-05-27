@@ -47,15 +47,11 @@ export function FinderWindow({
           <span className="tl tl--min tl--dim" aria-hidden="true" />
           <span className="tl tl--zoom tl--dim" aria-hidden="true" />
         </div>
-        <span className="window-titlebar-title">Selected Works</span>
+        <span className="window-titlebar-title">selected works</span>
       </div>
 
       <div className="finder">
         <div className="finder-main">
-          <div className="finder-toolbar">
-            <span>Selected Works</span>
-          </div>
-
           <div className="finder-grid">
             {works.map((work) => (
               <div

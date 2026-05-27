@@ -156,7 +156,7 @@ export default function App() {
         {windowState.type === 'contact' && (
           <SimpleTextWindow
             key="contact"
-            title="Contact.txt"
+            title="contact.txt"
             content={contactText}
             onClose={closeAll}
             isMobile={isMobile}
@@ -167,7 +167,7 @@ export default function App() {
         {windowState.type === 'readme' && (
           <SimpleTextWindow
             key="readme"
-            title="Read Me"
+            title="readme.txt"
             content={readMeText}
             onClose={closeAll}
             isMobile={isMobile}
