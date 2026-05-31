@@ -1,63 +1,61 @@
 import { useEffect, useRef } from 'react';
 import { CameraControls } from '@react-three/drei';
-import { POSES, POSES_MOBILE, CAMERA_SMOOTH_TIME, CameraPose } from './poses';
+import { CAMERA_SMOOTH_TIME, CameraTarget } from './poses';
 
 interface CameraRigProps {
-  pose: CameraPose;
-  isMobile: boolean;
+  target: CameraTarget;
   /**
-   * Reports the settled pose: `null` the instant an animated move starts (in
-   * transit), then the pose once the camera finishes settling. Lets consumers
+   * Reports the settled target key: `null` the instant an animated move starts
+   * (in transit), then the key once the camera finishes settling. Lets consumers
    * gate UI on "actually arrived" without trusting a stale last-known pose.
    */
-  onSettle?: (pose: CameraPose | null) => void;
+  onSettle?: (key: string | null) => void;
 }
 
-// Drives the camera between named poses. We keep the controller *enabled* so its
-// per-frame update() runs and animates our setLookAt transitions (drei only calls
-// update() when enabled). To still forbid free-orbiting and preserve the 2D
-// illusion, every mouse/touch gesture is mapped to ACTION.NONE (0) below.
-export function CameraRig({ pose, isMobile, onSettle }: CameraRigProps) {
+// Drives the camera to whatever target it's given. We keep the controller
+// *enabled* so its per-frame update() runs and animates our setLookAt transitions
+// (drei only calls update() when enabled). To still forbid free-orbiting and
+// preserve the 2D illusion, every mouse/touch gesture is mapped to ACTION.NONE.
+export function CameraRig({ target, onSettle }: CameraRigProps) {
   const controls = useRef<CameraControls>(null);
-  // First pose snaps into place (no transition); later changes animate.
+  // First target snaps into place (no transition); later changes animate.
   const hasInitialized = useRef(false);
-  // Keep the latest callback in a ref so it isn't an effect dependency (which
-  // would re-run setLookAt every render).
+  // Keep the latest callback in a ref so it isn't an effect dependency.
   const onSettleRef = useRef(onSettle);
   onSettleRef.current = onSettle;
 
-  const poseSet = isMobile ? POSES_MOBILE : POSES;
+  const { key, spec } = target;
 
   useEffect(() => {
     const c = controls.current;
     if (!c) return;
-    const p = poseSet[pose];
     const animate = hasInitialized.current;
     hasInitialized.current = true;
     const transition = c.setLookAt(
-      p.position[0], p.position[1], p.position[2],
-      p.target[0], p.target[1], p.target[2],
+      spec.position[0], spec.position[1], spec.position[2],
+      spec.target[0], spec.target[1], spec.target[2],
       animate,
     );
 
     if (!animate) {
-      // Initial snap — already there.
-      onSettleRef.current?.(pose);
+      onSettleRef.current?.(key);
       return;
     }
 
     // A move is starting: report "in transit" immediately so stale arrivals can't
-    // reveal UI early. Resolve to the pose when the camera reaches the destination.
-    // `cancelled` guards against a newer pose change interrupting this transition.
+    // reveal UI early. Resolve to the key when the camera reaches the destination.
+    // `cancelled` guards against a newer target interrupting this transition.
     onSettleRef.current?.(null);
     let cancelled = false;
     transition.then(() => {
-      if (!cancelled) onSettleRef.current?.(pose);
+      if (!cancelled) onSettleRef.current?.(key);
     });
     return () => {
       cancelled = true;
     };
-  }, [pose, poseSet]);
+    // Re-run only when the destination key changes (spec is derived from key).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
 
   return (
     <CameraControls

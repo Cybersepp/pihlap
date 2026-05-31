@@ -2,12 +2,18 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import './styles.css';
 import { IconClickOrigin } from './components/DesktopIcon';
-import { FinderWindow } from './components/FinderWindow';
 import { QuickTimeWindow } from './components/QuickTimeWindow';
 import { SimpleTextWindow } from './components/SimpleTextWindow';
 import { FolderIcon, TextDocIcon } from './components/Icons';
 import type { SceneIcon } from './three/DesktopIcons3D';
-import { ICON_POSITIONS, type CameraPose } from './three/poses';
+import {
+  GALLERY,
+  ICON_POSITIONS,
+  POSES,
+  POSES_MOBILE,
+  getFocusPoseFromWorld,
+  type CameraTarget,
+} from './three/poses';
 import { works, Work } from './data/works';
 import { contactText, readMeText } from './data/content';
 import { shouldUseMobileLayout } from './lib/device';
@@ -27,15 +33,20 @@ type WindowState =
 
 type SelectedIcon = 'works' | 'contact' | 'readme' | null;
 
+const focusKeyFor = (workId: string) => `focus:${workId}`;
+
 export default function App() {
   const [windowState, setWindowState] = useState<WindowState>({ type: 'none' });
   const [selectedIcon, setSelectedIcon] = useState<SelectedIcon>(null);
   const [origin, setOrigin] = useState<IconClickOrigin | null>(null);
   const [isMobile, setIsMobile] = useState(false);
-  // The pose the camera has actually finished settling into (reported by the
-  // CameraRig), or null while a move is in progress. Used to delay revealing the
-  // works window until the current arc completes — never trusting a stale pose.
-  const [settledPose, setSettledPose] = useState<CameraPose | null>('rest');
+  // The camera target key the rig has actually finished settling into, or null
+  // while a move is in progress. Used to delay revealing the video until the
+  // camera reaches the focused tile — never trusting a stale destination.
+  const [settledKey, setSettledKey] = useState<string | null>('rest');
+  // World position of the clicked file within the 3D Finder window — the camera
+  // flies here before the video opens.
+  const [focusWorld, setFocusWorld] = useState<[number, number, number]>(GALLERY.center);
 
   useEffect(() => {
     const check = () => {
@@ -68,8 +79,13 @@ export default function App() {
     }
   }
 
-  function openWorkFromFinder(work: Work, clickOrigin: IconClickOrigin) {
+  function openWorkFromFinder(
+    work: Work,
+    clickOrigin: IconClickOrigin,
+    world: [number, number, number],
+  ) {
     setOrigin(clickOrigin);
+    setFocusWorld(world);
     setWindowState({ type: 'quicktime', work });
   }
 
@@ -82,17 +98,45 @@ export default function App() {
     setWindowState({ type: 'none' });
   }
 
+  // Esc steps back one level: video → gallery, gallery/text → rest.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (windowState.type === 'quicktime') {
+        setWindowState({ type: 'finder' });
+      } else if (windowState.type !== 'none') {
+        setSelectedIcon(null);
+        setWindowState({ type: 'none' });
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [windowState.type]);
+
   const selectedWorkId = windowState.type === 'quicktime' ? windowState.work.id : undefined;
 
-  // Intent to show the works UI (finder + the quicktime opened from it). This is
-  // what swings the camera; contact/readme/none keep the resting 2D framing.
-  const wantsFinder = windowState.type === 'finder' || windowState.type === 'quicktime';
-  const cameraPose: CameraPose = wantsFinder ? 'behind' : 'rest';
+  // Whether the works gallery is in play (browsing the grid, or focused on a tile
+  // with the video open). Mounts the 3D grid and drives the camera off `rest`.
+  const wantsWorks = windowState.type === 'finder' || windowState.type === 'quicktime';
 
-  // ...but the window only actually renders once the camera has finished arcing
-  // behind the Buddha (settledPose, not a stale pose), so it appears at the
-  // camera's end position — and never opens early during a mid-flight re-click.
-  const finderVisible = wantsFinder && settledPose === 'behind';
+  // The camera destination derived from the current state.
+  const poseSet = isMobile ? POSES_MOBILE : POSES;
+  let cameraTarget: CameraTarget;
+  if (windowState.type === 'quicktime') {
+    cameraTarget = {
+      key: focusKeyFor(windowState.work.id),
+      spec: getFocusPoseFromWorld(focusWorld),
+    };
+  } else if (windowState.type === 'finder') {
+    cameraTarget = { key: 'gallery', spec: poseSet.gallery };
+  } else {
+    cameraTarget = { key: 'rest', spec: poseSet.rest };
+  }
+
+  // The DOM video only opens once the camera has actually arrived in front of the
+  // focused tile (settledKey matches) — never early during the fly-in.
+  const videoVisible =
+    windowState.type === 'quicktime' && settledKey === focusKeyFor(windowState.work.id);
 
   // Desktop icons, anchored in 3D world space (see DesktopIcons3D) so the camera
   // arc moves past them with parallax instead of leaving them glued to the screen.
@@ -128,30 +172,23 @@ export default function App() {
       {/* Dreamy cloudy sky backdrop — sits behind everything. */}
       <div className="sky" aria-hidden="true" />
 
-      {/* 3D Buddha + world-anchored desktop icons — full-screen layer behind windows. */}
+      {/* 3D Buddha + world-anchored icons + (while browsing) the works gallery. */}
       <Suspense fallback={null}>
         <BuddhaScene
-          pose={cameraPose}
+          target={cameraTarget}
           isMobile={isMobile}
           icons={sceneIcons}
-          onSettle={setSettledPose}
+          gallery={
+            wantsWorks
+              ? { works, selectedWorkId, onSelect: openWorkFromFinder, onClose: closeAll }
+              : null
+          }
+          onSettle={setSettledKey}
         />
       </Suspense>
 
       <AnimatePresence>
-        {finderVisible && (
-          <FinderWindow
-            key="finder"
-            works={works}
-            onClose={closeAll}
-            onSelectWork={openWorkFromFinder}
-            selectedWorkId={selectedWorkId}
-            isMobile={isMobile}
-            origin={origin}
-          />
-        )}
-
-        {windowState.type === 'quicktime' && finderVisible && (
+        {videoVisible && windowState.type === 'quicktime' && (
           <QuickTimeWindow
             key={`qt-${windowState.work.id}`}
             work={windowState.work}

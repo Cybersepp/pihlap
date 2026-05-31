@@ -3,21 +3,33 @@ import { Canvas } from '@react-three/fiber';
 import { Buddha } from './Buddha';
 import { CameraRig } from './CameraRig';
 import { DesktopIcons3D, SceneIcon } from './DesktopIcons3D';
-import { CameraPose } from './poses';
+import { WorksFinder3D } from './WorksFinder3D';
+import { CameraTarget } from './poses';
+import { Work } from '../data/works';
+import { IconClickOrigin } from '../components/DesktopIcon';
+
+interface GalleryProps {
+  works: Work[];
+  selectedWorkId?: string;
+  onSelect: (work: Work, origin: IconClickOrigin, world: [number, number, number]) => void;
+  onClose: () => void;
+}
 
 interface BuddhaSceneProps {
-  pose: CameraPose;
+  target: CameraTarget;
   isMobile: boolean;
   icons: SceneIcon[];
-  onSettle?: (pose: CameraPose | null) => void;
+  /** When set, the 3D works grid is mounted in the scene. */
+  gallery: GalleryProps | null;
+  onSettle?: (key: string | null) => void;
 }
 
 // Full-screen transparent 3D layer that replaces the old corner portrait.
 // It sits behind the desktop DOM (see .scene-canvas in styles.css) and contains
-// only the Buddha + lighting + the camera rig. Lighting is a simple three-point
-// rig (no HDRI / network dependency) which reads well against the model's baked
-// textures and vertex colors.
-export function BuddhaScene({ pose, isMobile, icons, onSettle }: BuddhaSceneProps) {
+// the Buddha + lighting + the camera rig, plus the world-anchored desktop icons
+// and (while browsing) the floating works gallery. Lighting is a simple
+// three-point rig (no HDRI / network dependency).
+export function BuddhaScene({ target, isMobile, icons, gallery, onSettle }: BuddhaSceneProps) {
   return (
     <div className="scene-canvas">
       <Canvas
@@ -37,7 +49,16 @@ export function BuddhaScene({ pose, isMobile, icons, onSettle }: BuddhaSceneProp
 
         <DesktopIcons3D icons={icons} />
 
-        <CameraRig pose={pose} isMobile={isMobile} onSettle={onSettle} />
+        {gallery && (
+          <WorksFinder3D
+            works={gallery.works}
+            selectedWorkId={gallery.selectedWorkId}
+            onSelect={gallery.onSelect}
+            onClose={gallery.onClose}
+          />
+        )}
+
+        <CameraRig target={target} onSettle={onSettle} />
       </Canvas>
     </div>
   );
