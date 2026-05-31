@@ -2,11 +2,14 @@ import { Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Buddha } from './Buddha';
 import { CameraRig } from './CameraRig';
+import { DesktopIcons3D, SceneIcon } from './DesktopIcons3D';
 import { CameraPose } from './poses';
 
 interface BuddhaSceneProps {
   pose: CameraPose;
   isMobile: boolean;
+  icons: SceneIcon[];
+  onSettle?: (pose: CameraPose | null) => void;
 }
 
 // Full-screen transparent 3D layer that replaces the old corner portrait.
@@ -14,7 +17,7 @@ interface BuddhaSceneProps {
 // only the Buddha + lighting + the camera rig. Lighting is a simple three-point
 // rig (no HDRI / network dependency) which reads well against the model's baked
 // textures and vertex colors.
-export function BuddhaScene({ pose, isMobile }: BuddhaSceneProps) {
+export function BuddhaScene({ pose, isMobile, icons, onSettle }: BuddhaSceneProps) {
   return (
     <div className="scene-canvas">
       <Canvas
@@ -32,7 +35,9 @@ export function BuddhaScene({ pose, isMobile }: BuddhaSceneProps) {
           <Buddha />
         </Suspense>
 
-        <CameraRig pose={pose} isMobile={isMobile} />
+        <DesktopIcons3D icons={icons} />
+
+        <CameraRig pose={pose} isMobile={isMobile} onSettle={onSettle} />
       </Canvas>
     </div>
   );

@@ -66,8 +66,76 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-  background: #EEEDE5;
+  /* Fallback while the .sky backdrop paints (also the bottom horizon tone). */
+  background: #eaf1fb;
   user-select: none;
+}
+
+/* ============================================================
+   DREAMY SKY BACKDROP
+   Fixed, full-screen, behind the 3D canvas (z 1) and windows (z 100).
+   Soft vertical gradient + two layers of blurred, slow-drifting clouds.
+   ============================================================ */
+.sky {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  background: linear-gradient(
+    180deg,
+    #aecdf2 0%,
+    #c4dbf6 26%,
+    #dfecfb 55%,
+    #f1eef0 82%,
+    #f7efe8 100%
+  );
+}
+
+/* Two cloud layers drifting at different speeds for a sense of depth. */
+.sky::before,
+.sky::after {
+  content: '';
+  position: absolute;
+  /* Oversized + offset so the blur and drift never reveal hard edges. */
+  inset: -25%;
+  background-repeat: no-repeat;
+  filter: blur(34px);
+  will-change: transform;
+}
+
+.sky::before {
+  background-image:
+    radial-gradient(38% 26% at 18% 28%, rgba(255, 255, 255, 0.92), transparent 62%),
+    radial-gradient(32% 22% at 62% 18%, rgba(255, 255, 255, 0.85), transparent 60%),
+    radial-gradient(46% 30% at 82% 48%, rgba(255, 255, 255, 0.8), transparent 62%),
+    radial-gradient(30% 20% at 40% 58%, rgba(255, 255, 255, 0.7), transparent 60%);
+  opacity: 0.9;
+  animation: sky-drift-a 70s ease-in-out infinite alternate;
+}
+
+.sky::after {
+  background-image:
+    radial-gradient(42% 24% at 30% 70%, rgba(255, 255, 255, 0.7), transparent 62%),
+    radial-gradient(30% 20% at 75% 78%, rgba(255, 255, 255, 0.6), transparent 60%),
+    radial-gradient(34% 22% at 8% 60%, rgba(255, 255, 255, 0.65), transparent 60%);
+  opacity: 0.75;
+  animation: sky-drift-b 95s ease-in-out infinite alternate;
+}
+
+@keyframes sky-drift-a {
+  from { transform: translate3d(-2%, 0, 0) scale(1.02); }
+  to   { transform: translate3d(4%, -1.5%, 0) scale(1.08); }
+}
+
+@keyframes sky-drift-b {
+  from { transform: translate3d(3%, 1%, 0) scale(1.05); }
+  to   { transform: translate3d(-3%, -1%, 0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sky::before,
+  .sky::after { animation: none; }
 }
 
 button { font: inherit; color: inherit; }
