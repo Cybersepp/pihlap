@@ -3,14 +3,14 @@ import { AnimatePresence } from 'framer-motion';
 import './styles.css';
 import { IconClickOrigin } from './components/DesktopIcon';
 import { QuickTimeWindow } from './components/QuickTimeWindow';
-import { SimpleTextWindow } from './components/SimpleTextWindow';
 import { FolderIcon, TextDocIcon } from './components/Icons';
 import type { SceneIcon } from './three/DesktopIcons3D';
+import type { Panel3DSpec } from './three/BuddhaScene';
 import {
   GALLERY,
-  ICON_POSITIONS,
   POSES,
   POSES_MOBILE,
+  FOCUS_SMOOTH_TIME,
   getFocusPoseFromWorld,
   type CameraTarget,
 } from './three/poses';
@@ -115,22 +115,33 @@ export default function App() {
 
   const selectedWorkId = windowState.type === 'quicktime' ? windowState.work.id : undefined;
 
-  // Whether the works gallery is in play (browsing the grid, or focused on a tile
-  // with the video open). Mounts the 3D grid and drives the camera off `rest`.
-  const wantsWorks = windowState.type === 'finder' || windowState.type === 'quicktime';
+  // The 3D window panel mounted in the gallery center, derived from state. The
+  // Finder (and the video opened from it) shows the works grid; contact/readme
+  // show a text panel — all of them swing the camera into the gallery.
+  let panel: Panel3DSpec | null = null;
+  if (windowState.type === 'finder' || windowState.type === 'quicktime') {
+    panel = { kind: 'finder', works, selectedWorkId, onSelect: openWorkFromFinder, onClose: closeAll };
+  } else if (windowState.type === 'contact') {
+    panel = { kind: 'text', title: 'contact.txt', content: contactText, onClose: closeAll };
+  } else if (windowState.type === 'readme') {
+    panel = { kind: 'text', title: 'readme.txt', content: readMeText, onClose: closeAll };
+  }
 
-  // The camera destination derived from the current state.
+  // The camera destination derived from the current state. Everything except the
+  // focused video frames the gallery center; the video flies to the clicked file.
   const poseSet = isMobile ? POSES_MOBILE : POSES;
   let cameraTarget: CameraTarget;
   if (windowState.type === 'quicktime') {
     cameraTarget = {
       key: focusKeyFor(windowState.work.id),
       spec: getFocusPoseFromWorld(focusWorld),
+      smoothTime: FOCUS_SMOOTH_TIME,
     };
-  } else if (windowState.type === 'finder') {
-    cameraTarget = { key: 'gallery', spec: poseSet.gallery };
-  } else {
+  } else if (windowState.type === 'none') {
     cameraTarget = { key: 'rest', spec: poseSet.rest };
+  } else {
+    // finder / contact / readme all swing behind the Buddha to the gallery view.
+    cameraTarget = { key: 'gallery', spec: poseSet.gallery };
   }
 
   // The DOM video only opens once the camera has actually arrived in front of the
@@ -138,15 +149,15 @@ export default function App() {
   const videoVisible =
     windowState.type === 'quicktime' && settledKey === focusKeyFor(windowState.work.id);
 
-  // Desktop icons, anchored in 3D world space (see DesktopIcons3D) so the camera
-  // arc moves past them with parallax instead of leaving them glued to the screen.
+  // Desktop icons. Their layout is computed responsively from the camera frustum
+  // inside DesktopIcons3D (fits any viewport), so here we only declare identity,
+  // selection, and click behaviour — the order sets the top→bottom stacking.
   const sceneIcons: SceneIcon[] = [
     {
       id: 'works',
       label: 'selected works',
       glyph: <FolderIcon />,
       selected: selectedIcon === 'works',
-      position: ICON_POSITIONS.works,
       onClick: (o) => openWindow('works', o),
     },
     {
@@ -154,7 +165,6 @@ export default function App() {
       label: 'contact.txt',
       glyph: <TextDocIcon />,
       selected: selectedIcon === 'contact',
-      position: ICON_POSITIONS.contact,
       onClick: (o) => openWindow('contact', o),
     },
     {
@@ -162,7 +172,6 @@ export default function App() {
       label: 'readme.txt',
       glyph: <TextDocIcon />,
       selected: selectedIcon === 'readme',
-      position: ICON_POSITIONS.readme,
       onClick: (o) => openWindow('readme', o),
     },
   ];
@@ -172,49 +181,24 @@ export default function App() {
       {/* Dreamy cloudy sky backdrop — sits behind everything. */}
       <div className="sky" aria-hidden="true" />
 
-      {/* 3D Buddha + world-anchored icons + (while browsing) the works gallery. */}
+      {/* 3D Buddha + world-anchored icons + (while a window is open) its 3D panel. */}
       <Suspense fallback={null}>
         <BuddhaScene
           target={cameraTarget}
           isMobile={isMobile}
           icons={sceneIcons}
-          gallery={
-            wantsWorks
-              ? { works, selectedWorkId, onSelect: openWorkFromFinder, onClose: closeAll }
-              : null
-          }
+          panel={panel}
           onSettle={setSettledKey}
         />
       </Suspense>
 
+      {/* The video player stays a DOM overlay; it opens once the camera reaches the file. */}
       <AnimatePresence>
         {videoVisible && windowState.type === 'quicktime' && (
           <QuickTimeWindow
             key={`qt-${windowState.work.id}`}
             work={windowState.work}
             onClose={closeQuicktime}
-            isMobile={isMobile}
-            origin={origin}
-          />
-        )}
-
-        {windowState.type === 'contact' && (
-          <SimpleTextWindow
-            key="contact"
-            title="contact.txt"
-            content={contactText}
-            onClose={closeAll}
-            isMobile={isMobile}
-            origin={origin}
-          />
-        )}
-
-        {windowState.type === 'readme' && (
-          <SimpleTextWindow
-            key="readme"
-            title="readme.txt"
-            content={readMeText}
-            onClose={closeAll}
             isMobile={isMobile}
             origin={origin}
           />

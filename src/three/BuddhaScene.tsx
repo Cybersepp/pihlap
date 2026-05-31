@@ -4,32 +4,37 @@ import { Buddha } from './Buddha';
 import { CameraRig } from './CameraRig';
 import { DesktopIcons3D, SceneIcon } from './DesktopIcons3D';
 import { WorksFinder3D } from './WorksFinder3D';
+import { TextPanel3D } from './TextPanel3D';
 import { CameraTarget } from './poses';
 import { Work } from '../data/works';
 import { IconClickOrigin } from '../components/DesktopIcon';
 
-interface GalleryProps {
-  works: Work[];
-  selectedWorkId?: string;
-  onSelect: (work: Work, origin: IconClickOrigin, world: [number, number, number]) => void;
-  onClose: () => void;
-}
+// Which 3D window panel is mounted in the gallery center (if any).
+export type Panel3DSpec =
+  | {
+      kind: 'finder';
+      works: Work[];
+      selectedWorkId?: string;
+      onSelect: (work: Work, origin: IconClickOrigin, world: [number, number, number]) => void;
+      onClose: () => void;
+    }
+  | { kind: 'text'; title: string; content: string; onClose: () => void };
 
 interface BuddhaSceneProps {
   target: CameraTarget;
   isMobile: boolean;
   icons: SceneIcon[];
-  /** When set, the 3D works grid is mounted in the scene. */
-  gallery: GalleryProps | null;
+  /** The 3D window panel to mount in the gallery center, or null. */
+  panel: Panel3DSpec | null;
   onSettle?: (key: string | null) => void;
 }
 
 // Full-screen transparent 3D layer that replaces the old corner portrait.
 // It sits behind the desktop DOM (see .scene-canvas in styles.css) and contains
 // the Buddha + lighting + the camera rig, plus the world-anchored desktop icons
-// and (while browsing) the floating works gallery. Lighting is a simple
-// three-point rig (no HDRI / network dependency).
-export function BuddhaScene({ target, isMobile, icons, gallery, onSettle }: BuddhaSceneProps) {
+// and (while a window is open) a 3D window panel floating in the gallery center.
+// Lighting is a simple three-point rig (no HDRI / network dependency).
+export function BuddhaScene({ target, isMobile, icons, panel, onSettle }: BuddhaSceneProps) {
   return (
     <div className="scene-canvas">
       <Canvas
@@ -49,13 +54,17 @@ export function BuddhaScene({ target, isMobile, icons, gallery, onSettle }: Budd
 
         <DesktopIcons3D icons={icons} />
 
-        {gallery && (
+        {panel?.kind === 'finder' && (
           <WorksFinder3D
-            works={gallery.works}
-            selectedWorkId={gallery.selectedWorkId}
-            onSelect={gallery.onSelect}
-            onClose={gallery.onClose}
+            works={panel.works}
+            selectedWorkId={panel.selectedWorkId}
+            onSelect={panel.onSelect}
+            onClose={panel.onClose}
           />
+        )}
+
+        {panel?.kind === 'text' && (
+          <TextPanel3D title={panel.title} content={panel.content} onClose={panel.onClose} />
         )}
 
         <CameraRig target={target} onSettle={onSettle} />

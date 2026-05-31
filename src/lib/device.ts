@@ -2,6 +2,9 @@ import type { CSSProperties } from 'react';
 
 const MOBILE_WIDTH = 768;
 const MOBILE_HEIGHT = 640;
+// Above this width we treat the viewport as a desktop even if it's short and
+// touch-capable — this keeps touchscreen laptops/monitors out of mobile layout.
+const LANDSCAPE_PHONE_MAX_WIDTH = 950;
 const MENUBAR_HEIGHT = 28;
 const WINDOW_PADDING = 32;
 const QT_TITLEBAR_HEIGHT = 38;
@@ -23,8 +26,13 @@ export function getViewportSize() {
 
 export function shouldUseMobileLayout(): boolean {
   const { width, height } = getViewportSize();
-  const isSmallViewport = width < MOBILE_WIDTH || height < MOBILE_HEIGHT;
-  return isSmallViewport && isTouchDevice();
+  // Phone-width (portrait) viewport — always mobile.
+  if (width < MOBILE_WIDTH) return true;
+  // Landscape phone: short AND touch AND not as wide as a desktop monitor. The
+  // width cap is what keeps wide touchscreen desktops/laptops on desktop layout.
+  if (isTouchDevice() && height < MOBILE_HEIGHT && width < LANDSCAPE_PHONE_MAX_WIDTH) return true;
+  // Everything wider (incl. touchscreen desktops) uses the desktop layout/poses.
+  return false;
 }
 
 export function clampWindowSize(width: number, height: number) {

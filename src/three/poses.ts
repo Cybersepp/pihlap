@@ -17,13 +17,15 @@ export interface PoseSpec {
 export interface CameraTarget {
   key: string;
   spec: PoseSpec;
+  /** Per-move easing time (seconds). Defaults to CAMERA_SMOOTH_TIME. */
+  smoothTime?: number;
 }
 
 // Where the works window panel floats in world space (in front of the Buddha,
 // farther out). The gallery camera looks here AND the panel is centered here —
 // they share this one constant so they always stay consistent. Tune this to move
 // the whole gallery; tune POSES.gallery.position to move the camera viewpoint.
-export const GALLERY_CENTER: [number, number, number] = [0, 0.4, 3.0];
+export const GALLERY_CENTER: [number, number, number] = [0, 0.4, 1.7];
 
 // Static named poses.
 //  - `rest`    : the "2D website" framing — Buddha facing the viewer. No 3D hint.
@@ -34,7 +36,7 @@ export const GALLERY_CENTER: [number, number, number] = [0, 0.4, 3.0];
 //                the panel even if you move it.
 export const POSES: Record<'rest' | 'gallery', PoseSpec> = {
   rest: { position: [0, 0.0, 7], target: [0, 0.0, 0] },
-  gallery: { position: [0, 0.4, -2.2], target: GALLERY_CENTER },
+  gallery: { position: [-4, 2, -5], target: GALLERY_CENTER },
 };
 
 export const POSES_MOBILE: Record<'rest' | 'gallery', PoseSpec> = {
@@ -51,23 +53,30 @@ export const TARGET_SIZE = 3.0;
 export const MODEL_ROTATION: [number, number, number] = [0, 0.25, 0];
 
 // Seconds for the camera to ease between poses (camera-controls smoothTime).
+// CAMERA_SMOOTH_TIME is the default (the cinematic swing behind the Buddha);
+// FOCUS_SMOOTH_TIME is the snappier fly-to-file so the video opens quickly.
 export const CAMERA_SMOOTH_TIME = 0.85;
+export const FOCUS_SMOOTH_TIME = 0.35;
 
-// World positions of the desktop icons, in normalized scene units. The icons are
-// anchored here in 3D space (not glued to the screen) so the camera arc produces
-// real parallax — selling "we moved" instead of "the Buddha spun". At the `rest`
-// pose these should land on the left, vertically stacked, like the old desktop.
-// Tune live in `npm run dev`.
-export const ICON_POSITIONS: Record<string, [number, number, number]> = {
-  works: [-3.5, 1.5, 0],
-  contact: [-3.5, 0.5, 0],
-  readme: [-3.5, -0.5, 0],
-};
+// ── Desktop icons (responsive layout) ───────────────────────────────────────
+// The icons are NOT positioned with hardcoded coordinates. Instead DesktopIcons3D
+// computes their world positions from the resting camera's view frustum, so they
+// hug the left edge and fit any viewport/aspect (desktop or phone) automatically.
+// They stay world-anchored (fixed during the camera swing → real parallax); only
+// a viewport resize repositions them. Tune the layout with the constants below.
 
-// Scale applied to the Html-transformed icons. In `transform` mode 1 CSS pixel ≈
-// 1 world unit at scale 1, so a ~108px icon needs a small factor to read at the
-// resting camera distance. Adjust alongside ICON_POSITIONS.
-export const ICON_SCALE = 0.3075;
+// The desktop-icon DOM width in CSS px (see `.desktop-icon` in styles.css).
+export const ICON_PX_WIDTH = 108;
+// Vertical world positions for the stacked icons (top → bottom), index-matched
+// to the icon order. Constant across devices — the visible height barely changes
+// with aspect, so these always fit.
+export const ICON_ROWS_Y = [1.5, 0.5, -0.5];
+// World gap kept between the left viewport edge and the icon column.
+export const ICON_EDGE_MARGIN = 0.15;
+// Base scale at full size; auto-shrinks on narrow viewports so an icon never
+// exceeds ICON_MAX_WIDTH_FRACTION of the visible width.
+export const ICON_BASE_SCALE = 0.3075;
+export const ICON_MAX_WIDTH_FRACTION = 0.3;
 
 // ── 3D works gallery ────────────────────────────────────────────────────────
 // The actual Finder window (glass panel, titlebar, grid) floats as ONE panel in

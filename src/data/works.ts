@@ -26,8 +26,8 @@ export const works: Work[] = [
     description: "Music video for fakov's track Men's Health — stark, minimal frames built around a single visual idea.",
     process: "Directed and edited by Martin Pihlap.",
     loopUrl: publicAsset("loops/fakov-mens-health.mp4"),
-    fullPieceUrl: "https://vimeo.com/1196706577",
-    vimeoUrl: "https://vimeo.com/1196706577",
+    fullPieceUrl: "https://vimeo.com/1197106634",
+    vimeoUrl: "https://vimeo.com/1197106634",
   },
   {
     id: "ff2023-aftermovie",
@@ -103,7 +103,8 @@ export const works: Work[] = [
     description: "Pilot episode of Makeover — stylist Pusik107 rebuilds identities with Racer Worldwide's wardrobe.",
     process: "Directed by Martin Pihlap. Self-ironic fashion reality for a new generation.",
     loopUrl: publicAsset("loops/makeover-s01e01.mp4"),
-    fullPieceUrl: "https://vimeo.com",
+    fullPieceUrl: "https://vimeo.com/1197106210",
+    vimeoUrl: "https://vimeo.com/1197106210",
   },
   {
     id: "mihhail-dream-blunt",
