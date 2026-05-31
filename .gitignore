@@ -23,3 +23,8 @@ dist-ssr
 .env
 
 .claude/settings.local.json
+
+# Uncompressed source model — public/buddha.glb is the optimized, served copy.
+# Re-run: gltf-transform optimize buddha-source.glb public/buddha.glb \
+#   --compress quantize --texture-compress webp --simplify false
+buddha-source.glb

@@ -78,6 +78,18 @@ button { font: inherit; color: inherit; }
 .desktop {
   position: absolute;
   inset: 0;
+  /* Sit above the transparent 3D canvas so icons/labels stay crisp and on top. */
+  z-index: 2;
+}
+
+/* Full-screen transparent WebGL layer holding the 3D Buddha. Lives behind the
+   desktop icons (z 2) and well below the windows (z 100). pointer-events: none
+   so it never intercepts clicks meant for the desktop. */
+.scene-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-figure);
+  pointer-events: none;
 }
 
 .desktop-icon {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import './styles.css';
 import { DesktopIcon, IconClickOrigin } from './components/DesktopIcon';
@@ -9,6 +9,12 @@ import { FolderIcon, TextDocIcon } from './components/Icons';
 import { works, Work } from './data/works';
 import { contactText, readMeText } from './data/content';
 import { shouldUseMobileLayout } from './lib/device';
+
+// The 3D layer pulls in three.js + drei (~900KB). Code-split it so the desktop
+// DOM paints instantly and the WebGL bundle streams in as its own chunk.
+const BuddhaScene = lazy(() =>
+  import('./three/BuddhaScene').then((m) => ({ default: m.BuddhaScene })),
+);
 
 type WindowState =
   | { type: 'none' }
@@ -73,6 +79,10 @@ export default function App() {
   const selectedWorkId = windowState.type === 'quicktime' ? windowState.work.id : undefined;
   const finderVisible = windowState.type === 'finder' || windowState.type === 'quicktime';
 
+  // Only the "selected works" flow (finder + the quicktime opened from it) swings
+  // the camera behind the Buddha. contact/readme/none keep the resting 2D framing.
+  const cameraPose = finderVisible ? 'behind' : 'rest';
+
   return (
     <>
       <div className="desktop">
@@ -106,29 +116,12 @@ export default function App() {
           />
         </div>
 
-        {/* Atmospheric figure */}
-        <img
-          src={`${import.meta.env.BASE_URL}cropped_compressed.jpg`}
-          alt=""
-          draggable={false}
-          style={{
-            position: 'absolute',
-            bottom: 0,
-            right: 0,
-            maxWidth: isMobile ? '58vw' : 'min(40vw, 500px)',
-            maxHeight: isMobile ? '52vh' : 'min(82vh, 90%)',
-            width: 'auto',
-            height: 'auto',
-            objectFit: 'contain',
-            objectPosition: 'bottom right',
-            display: 'block',
-            opacity: 0.82,
-            mixBlendMode: 'multiply',
-            pointerEvents: 'none',
-            zIndex: 1,
-          }}
-        />
       </div>
+
+      {/* 3D Buddha figure — full-screen transparent layer behind the desktop. */}
+      <Suspense fallback={null}>
+        <BuddhaScene pose={cameraPose} isMobile={isMobile} />
+      </Suspense>
 
       <AnimatePresence>
         {finderVisible && (
