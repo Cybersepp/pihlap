@@ -26,7 +26,8 @@ export const works: Work[] = [
     description: "Music video for fakov's track Men's Health — stark, minimal frames built around a single visual idea.",
     process: "Directed and edited by Martin Pihlap.",
     loopUrl: publicAsset("loops/fakov-mens-health.mp4"),
-    fullPieceUrl: "https://vimeo.com",
+    fullPieceUrl: "https://vimeo.com/1196706577",
+    vimeoUrl: "https://vimeo.com/1196706577",
   },
   {
     id: "ff2023-aftermovie",
@@ -37,7 +38,8 @@ export const works: Work[] = [
     description: "Aftermovie capturing the energy of a 2023 fashion-film event — crowd, light, and aftermath.",
     process: "Shot and cut as a fast-paced event recap.",
     loopUrl: publicAsset("loops/ff2023-aftermovie.mp4"),
-    fullPieceUrl: "https://vimeo.com",
+    fullPieceUrl: "https://vimeo.com/1196730156",
+    vimeoUrl: "https://vimeo.com/1196730156",
   },
   {
     id: "jessica-week-ago",
@@ -49,7 +51,8 @@ export const works: Work[] = [
     description: "Music video for Jessica 2010's Week Ago — lo-fi, observational storytelling in post-Soviet spaces.",
     process: "Directed by Martin Pihlap. Nominated for UK Music Video Awards Newcomer.",
     loopUrl: publicAsset("loops/jessica-week-ago.mp4"),
-    fullPieceUrl: "https://vimeo.com",
+    fullPieceUrl: "https://vimeo.com/1196918333",
+    vimeoUrl: "https://vimeo.com/1196918333",
   },
   {
     id: "jessica-posted",
@@ -74,7 +77,8 @@ export const works: Work[] = [
     description: "Fashion-forward rap video following Kai Angel through Milan nightlife and a Prada party invitation.",
     process: "Directed by Martin Pihlap. Winner of Clip of the Year at Risa za Tvorchestvo.",
     loopUrl: publicAsset("loops/kai-angel-prada-party.mp4"),
-    fullPieceUrl: "https://www.youtube.com/results?search_query=Kai+Angel+PRADA+PARTY+official",
+    fullPieceUrl: "https://vimeo.com/1196916186",
+    vimeoUrl: "https://vimeo.com/1196916186",
   },
   {
     id: "makeover-intro",
@@ -86,7 +90,8 @@ export const works: Work[] = [
     description: "Opening sequence for Makeover — Racer Worldwide's absurdist fashion mockumentary series.",
     process: "Directed by Martin Pihlap for Racer Worldwide.",
     loopUrl: publicAsset("loops/makeover-intro.mp4"),
-    fullPieceUrl: "https://vimeo.com",
+    fullPieceUrl: "https://vimeo.com/1196916569",
+    vimeoUrl: "https://vimeo.com/1196916569",
   },
   {
     id: "makeover-s01e01",
@@ -110,7 +115,8 @@ export const works: Work[] = [
     description: "Behind-the-scenes glimpse into a spontaneous recording session — dreamlike, intimate, and unfiltered.",
     process: "Directed by Martin Pihlap. Lo-fi textures and surreal owl imagery in forest landscapes.",
     loopUrl: publicAsset("loops/mihhail-dream-blunt.mp4"),
-    fullPieceUrl: "https://www.promonews.tv/videos/2026/01/16/mihhail-dream-blunt-martin-pihlap/93732",
+    fullPieceUrl: "https://vimeo.com/1196916999",
+    vimeoUrl: "https://vimeo.com/1196916999",
   },
   {
     id: "moment",
@@ -121,7 +127,8 @@ export const works: Work[] = [
     description: "Music video built around a single gesture — hands, colour, and tension held in close-up.",
     process: "Directed by Martin Pihlap.",
     loopUrl: publicAsset("loops/moment.mp4"),
-    fullPieceUrl: "https://vimeo.com",
+    fullPieceUrl: "https://vimeo.com/1196919620",
+    vimeoUrl: "https://vimeo.com/1196919620",
   },
   {
     id: "racer-remagine",
@@ -133,7 +140,8 @@ export const works: Work[] = [
     description: "Campaign film for the Racer × remagine collaboration — product and attitude in one frame.",
     process: "Directed for Racer Worldwide.",
     loopUrl: publicAsset("loops/racer-remagine.mp4"),
-    fullPieceUrl: "https://www.racerworldwide.net/collections/racer-x-remagine",
+    fullPieceUrl: "https://vimeo.com/1196918679",
+    vimeoUrl: "https://vimeo.com/1196918679",
   },
   {
     id: "racer-ss25",
@@ -145,7 +153,8 @@ export const works: Work[] = [
     description: "Runway and world-building film for SS25 Spring Break — early-2010s internet nostalgia turned maximalist.",
     process: "Creative direction by Mihhail Zigadlo. Part of the MyRacer digital storytelling platform.",
     loopUrl: publicAsset("loops/racer-ss25.mp4"),
-    fullPieceUrl: "https://vimeo.com",
+    fullPieceUrl: "https://vimeo.com/1196920285",
+    vimeoUrl: "https://vimeo.com/1196920285",
   },
   {
     id: "thrill-pill-plastik",
@@ -157,6 +166,7 @@ export const works: Work[] = [
     description: "High-contrast music video set in fog and ski lifts — grain, white-out light, and industrial rhythm.",
     process: "Directed by Martin Pihlap. Winner of Clip of the Month at Risa za Tvorchestvo.",
     loopUrl: publicAsset("loops/thrill-pill-plastik.mp4"),
-    fullPieceUrl: "https://www.youtube.com/results?search_query=THRILL+PILL+Plastik+official",
+    fullPieceUrl: "https://vimeo.com/1196919826",
+    vimeoUrl: "https://vimeo.com/1196919826",
   },
 ];

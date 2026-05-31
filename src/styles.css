@@ -564,88 +564,6 @@ button { font: inherit; color: inherit; }
   background: transparent;
 }
 
-/* Metadata panel */
-.qt-meta {
-  background: rgba(20, 20, 20, 0.92);
-  color: #fff;
-  padding: 22px 26px;
-  flex: 1 1 auto;
-  overflow-y: auto;
-  min-height: 120px;
-  -webkit-overflow-scrolling: touch;
-}
-
-.qt-meta-title {
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  margin: 0 0 4px;
-}
-
-.qt-meta-sub {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.6);
-  margin: 0 0 16px;
-}
-
-.qt-meta-grid {
-  display: grid;
-  grid-template-columns: 88px 1fr;
-  row-gap: 4px;
-  column-gap: 14px;
-  font-size: 12.5px;
-  margin-bottom: 16px;
-}
-
-.qt-meta-key {
-  color: rgba(255, 255, 255, 0.55);
-  font-weight: 500;
-}
-
-.qt-meta-val {
-  color: #fff;
-  font-weight: 500;
-}
-
-.qt-meta-divider {
-  height: 0.5px;
-  background: rgba(255, 255, 255, 0.12);
-  margin: 14px 0;
-}
-
-.qt-meta-section-label {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.5);
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  margin: 0 0 6px;
-  font-weight: 600;
-}
-
-.qt-meta-para {
-  font-size: 13px;
-  line-height: 1.55;
-  color: rgba(255, 255, 255, 0.88);
-  margin: 0 0 14px;
-}
-
-.qt-meta-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 6px;
-  padding: 9px 14px;
-  background: var(--accent);
-  color: #fff;
-  border-radius: 8px;
-  text-decoration: none;
-  font-size: 13px;
-  font-weight: 600;
-  transition: background 100ms ease;
-}
-
-.qt-meta-link:hover { background: var(--accent-hover); }
-
 /* ============================================================
    SIMPLETEXT (TextEdit-style)
    ============================================================ */
@@ -754,8 +672,6 @@ button { font: inherit; color: inherit; }
 }
 *::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.32); background-clip: padding-box; border: 2px solid transparent; }
 
-.qt-meta::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.22); background-clip: padding-box; border: 2px solid transparent; }
-
 /* ============================================================
    MOBILE / TOUCH
    ============================================================ */
@@ -800,11 +716,6 @@ button { font: inherit; color: inherit; }
     padding: 22px 20px;
     font-size: 14.5px;
   }
-
-  /* QT meta panel — tighten desktop padding */
-  .qt-meta { padding: 18px 18px; }
-  .qt-meta-title { font-size: 20px; }
-  .qt-meta-grid { grid-template-columns: 78px 1fr; }
 }
 
 /* Very narrow phones (~360px and below): drop to 2-column Finder */

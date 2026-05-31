@@ -13,8 +13,7 @@ interface QuickTimeWindowProps {
   origin: IconClickOrigin | null;
 }
 
-const WIN_WIDTH = 720;
-const WIN_HEIGHT = 720;
+const MAX_VIDEO_WIDTH = 1080;
 
 function PlayIcon() {
   return (
@@ -211,8 +210,10 @@ export function QuickTimeWindow({ work, onClose, isMobile, origin }: QuickTimeWi
   }, [usePseudoFullscreen]);
 
   // Auto-hide controls after idle in fullscreen.
+  // Skip auto-hide on touch: without hover, tap-to-reveal is unreliable on iOS
+  // (cross-origin iframe can swallow taps), and a hidden exit button becomes a trap.
   useEffect(() => {
-    if (inFullscreen) {
+    if (inFullscreen && !isMobile) {
       setControlsVisible(true);
       if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
       hideTimerRef.current = window.setTimeout(() => setControlsVisible(false), 2500);
@@ -229,10 +230,10 @@ export function QuickTimeWindow({ work, onClose, isMobile, origin }: QuickTimeWi
         hideTimerRef.current = null;
       }
     };
-  }, [inFullscreen]);
+  }, [inFullscreen, isMobile]);
 
   function onPointerActivity() {
-    if (!inFullscreen) return;
+    if (!inFullscreen || isMobile) return;
     setControlsVisible(true);
     if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
     hideTimerRef.current = window.setTimeout(() => setControlsVisible(false), 2500);
@@ -300,7 +301,7 @@ export function QuickTimeWindow({ work, onClose, isMobile, origin }: QuickTimeWi
     ? `${formatTime(currentTime)} / ${formatTime(duration)}`
     : '00:08';
 
-  const { clamped, videoHeight, videoWidth, windowStyle } = getQuickTimeLayout(WIN_WIDTH, WIN_HEIGHT);
+  const { clamped, videoHeight, videoWidth, windowStyle } = getQuickTimeLayout(MAX_VIDEO_WIDTH);
 
   return (
     <motion.div
@@ -447,50 +448,6 @@ export function QuickTimeWindow({ work, onClose, isMobile, origin }: QuickTimeWi
               </span>
             )}
           </div>
-        </div>
-
-        {/* Metadata panel */}
-        <div className="qt-meta">
-          <h2 className="qt-meta-title">{work.title}</h2>
-          <p className="qt-meta-sub">
-            {work.client ? `${work.client} · ` : ''}
-            {work.year} · {work.location}
-          </p>
-
-          <div className="qt-meta-grid">
-            <span className="qt-meta-key">Year</span>
-            <span className="qt-meta-val">{work.year}</span>
-            {work.client && (
-              <>
-                <span className="qt-meta-key">Client</span>
-                <span className="qt-meta-val">{work.client}</span>
-              </>
-            )}
-            <span className="qt-meta-key">Location</span>
-            <span className="qt-meta-val">{work.location}</span>
-          </div>
-
-          <div className="qt-meta-divider" />
-
-          <p className="qt-meta-section-label">Description</p>
-          <p className="qt-meta-para">{work.description}</p>
-
-          <p className="qt-meta-section-label">Process</p>
-          <p className="qt-meta-para">{work.process}</p>
-
-          {!vimeoId && (
-            <a
-              href={work.fullPieceUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="qt-meta-link"
-            >
-              Watch full piece
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
-                <path d="M3 6h6m0 0L6.5 3.5M9 6L6.5 8.5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" />
-              </svg>
-            </a>
-          )}
         </div>
       </div>
     </motion.div>
