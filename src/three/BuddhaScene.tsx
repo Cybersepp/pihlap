@@ -27,6 +27,8 @@ interface BuddhaSceneProps {
   /** The 3D window panel to mount in the gallery center, or null. */
   panel: Panel3DSpec | null;
   onSettle?: (key: string | null) => void;
+  /** User may orbit around the gallery panel (after the swing settles). */
+  orbitEnabled?: boolean;
 }
 
 // Full-screen transparent 3D layer that replaces the old corner portrait.
@@ -34,7 +36,7 @@ interface BuddhaSceneProps {
 // the Buddha + lighting + the camera rig, plus the world-anchored desktop icons
 // and (while a window is open) a 3D window panel floating in the gallery center.
 // Lighting is a simple three-point rig (no HDRI / network dependency).
-export function BuddhaScene({ target, isMobile, icons, panel, onSettle }: BuddhaSceneProps) {
+export function BuddhaScene({ target, isMobile, icons, panel, onSettle, orbitEnabled }: BuddhaSceneProps) {
   return (
     <div className="scene-canvas">
       <Canvas
@@ -67,7 +69,7 @@ export function BuddhaScene({ target, isMobile, icons, panel, onSettle }: Buddha
           <TextPanel3D title={panel.title} content={panel.content} onClose={panel.onClose} />
         )}
 
-        <CameraRig target={target} onSettle={onSettle} />
+        <CameraRig target={target} onSettle={onSettle} orbitEnabled={orbitEnabled} />
       </Canvas>
     </div>
   );

@@ -1,6 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { CameraControls } from '@react-three/drei';
-import { CAMERA_SMOOTH_TIME, CameraTarget } from './poses';
+import CameraControlsImpl from 'camera-controls';
+import { CAMERA_SMOOTH_TIME, CameraTarget, GALLERY_CENTER } from './poses';
+
+const { ACTION } = CameraControlsImpl;
 
 interface CameraRigProps {
   target: CameraTarget;
@@ -10,13 +13,21 @@ interface CameraRigProps {
    * gate UI on "actually arrived" without trusting a stale last-known pose.
    */
   onSettle?: (key: string | null) => void;
+  /** After the gallery swing finishes, allow drag / pinch orbit around `orbitCenter`. */
+  orbitEnabled?: boolean;
+  orbitCenter?: [number, number, number];
 }
 
 // Drives the camera to whatever target it's given. We keep the controller
 // *enabled* so its per-frame update() runs and animates our setLookAt transitions
-// (drei only calls update() when enabled). To still forbid free-orbiting and
-// preserve the 2D illusion, every mouse/touch gesture is mapped to ACTION.NONE.
-export function CameraRig({ target, onSettle }: CameraRigProps) {
+// (drei only calls update() when enabled). Gestures are off at rest and during
+// animated moves; in the settled gallery view the user can orbit around the panel.
+export function CameraRig({
+  target,
+  onSettle,
+  orbitEnabled = false,
+  orbitCenter = GALLERY_CENTER,
+}: CameraRigProps) {
   const controls = useRef<CameraControls>(null);
   // First target snaps into place (no transition); later changes animate.
   const hasInitialized = useRef(false);
@@ -60,13 +71,35 @@ export function CameraRig({ target, onSettle }: CameraRigProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
+  useEffect(() => {
+    const c = controls.current;
+    if (!c || !orbitEnabled) return;
+    c.setTarget(orbitCenter[0], orbitCenter[1], orbitCenter[2], false);
+  }, [orbitEnabled, orbitCenter]);
+
+  const blocked = { left: ACTION.NONE, middle: ACTION.NONE, right: ACTION.NONE, wheel: ACTION.NONE };
+  const orbitMouse = {
+    left: ACTION.ROTATE,
+    middle: ACTION.DOLLY,
+    right: ACTION.NONE,
+    wheel: ACTION.DOLLY,
+  };
+  const blockedTouch = { one: ACTION.NONE, two: ACTION.NONE, three: ACTION.NONE };
+  const orbitTouch = {
+    one: ACTION.TOUCH_ROTATE,
+    two: ACTION.TOUCH_DOLLY,
+    three: ACTION.NONE,
+  };
+
   return (
     <CameraControls
       ref={controls}
-      // ACTION.NONE === 0 — block every drag/scroll/pinch so the camera only
-      // ever moves under our programmatic control.
-      mouseButtons={{ left: 0, middle: 0, right: 0, wheel: 0 }}
-      touches={{ one: 0, two: 0, three: 0 }}
+      mouseButtons={orbitEnabled ? orbitMouse : blocked}
+      touches={orbitEnabled ? orbitTouch : blockedTouch}
+      minDistance={orbitEnabled ? 3 : undefined}
+      maxDistance={orbitEnabled ? 14 : undefined}
+      minPolarAngle={orbitEnabled ? Math.PI * 0.12 : undefined}
+      maxPolarAngle={orbitEnabled ? Math.PI * 0.88 : undefined}
       makeDefault
     />
   );

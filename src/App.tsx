@@ -170,7 +170,16 @@ export default function App() {
     {
       id: 'readme',
       label: 'readme.txt',
-      glyph: <TextDocIcon />,
+      glyph: (
+        <img
+          src={`${import.meta.env.BASE_URL}bat.jpg`}
+          alt=""
+          width={56}
+          height={56}
+          draggable={false}
+          style={{ objectFit: 'cover', borderRadius: 8, display: 'block' }}
+        />
+      ),
       selected: selectedIcon === 'readme',
       onClick: (o) => openWindow('readme', o),
     },
@@ -189,6 +198,7 @@ export default function App() {
           icons={sceneIcons}
           panel={panel}
           onSettle={setSettledKey}
+          orbitEnabled={settledKey === 'gallery'}
         />
       </Suspense>
 
