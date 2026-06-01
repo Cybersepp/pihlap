@@ -28,8 +28,6 @@ jobs:
       - run: npm ci
 
       - run: npm run build
-        env:
-          GITHUB_PAGES: true
 
       - name: Verify build output
         run: |
@@ -37,8 +35,8 @@ jobs:
             echo "::error::dist/index.html still references dev sources — build did not run correctly"
             exit 1
           fi
-          if ! grep -q '/pihlap/assets/' dist/index.html; then
-            echo "::error::dist/index.html missing /pihlap/ asset paths"
+          if ! grep -q '/assets/' dist/index.html; then
+            echo "::error::dist/index.html missing root asset paths"
             exit 1
           fi
 
