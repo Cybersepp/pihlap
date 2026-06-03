@@ -25,7 +25,7 @@ export interface CameraTarget {
 // farther out). The gallery camera looks here AND the panel is centered here —
 // they share this one constant so they always stay consistent. Tune this to move
 // the whole gallery; tune POSES.gallery.position to move the camera viewpoint.
-export const GALLERY_CENTER: [number, number, number] = [0, 0.4, 1.7];
+export const GALLERY_CENTER: [number, number, number] = [0, 1, 1.7];
 
 // Static named poses.
 //  - `rest`    : the "2D website" framing — Buddha facing the viewer. No 3D hint.
@@ -44,13 +44,17 @@ export const POSES_MOBILE: Record<'rest' | 'gallery', PoseSpec> = {
   gallery: { position: [-4, 2, -5], target: GALLERY_CENTER },
 };
 
+// Single static camera field of view (degrees) for the whole scene — used by the
+// Canvas and by DesktopIcons3D to frame the icon column against the rest frustum.
+export const SCENE_FOV = 32;
+
 // How tall (in world units) the Buddha's largest dimension is normalized to.
 export const TARGET_SIZE = 3.0;
 
 // Extra rotation applied to the model, in radians [x, y, z]. Sketchfab exports
 // don't always face +Z (toward the resting camera). If the Buddha shows its
 // back or side at rest, nudge the Y value here.
-export const MODEL_ROTATION: [number, number, number] = [0, 0.25, 0];
+export const MODEL_ROTATION: [number, number, number] = [0, 4, 0.2];
 
 // Seconds for the camera to ease between poses (camera-controls smoothTime).
 // CAMERA_SMOOTH_TIME is the default (the cinematic swing behind the Buddha);
@@ -78,6 +82,22 @@ export const ICON_EDGE_MARGIN = 0.15;
 export const ICON_BASE_SCALE = 0.3075;
 export const ICON_MAX_WIDTH_FRACTION = 0.3;
 
+// World X (and on-screen scale) of the desktop icon column for a given viewport
+// aspect, framed against the rest pose. Shared by DesktopIcons3D (to place the
+// column) and WorksReveal3D (so the files fly out of the actual folder icon).
+export function iconColumnLayout(aspect: number): { x: number; scale: number } {
+  const HTML_TRANSFORM_DIVISOR = 40;
+  const restDist = POSES.rest.position[2];
+  const halfH = restDist * Math.tan((SCENE_FOV * Math.PI) / 360);
+  const halfW = halfH * aspect;
+  const fullWidth = (ICON_PX_WIDTH * ICON_BASE_SCALE) / HTML_TRANSFORM_DIVISOR;
+  const scale =
+    ICON_BASE_SCALE * Math.min(1, (ICON_MAX_WIDTH_FRACTION * 2 * halfW) / fullWidth);
+  const iconHalfWidth = (ICON_PX_WIDTH * scale) / HTML_TRANSFORM_DIVISOR / 2;
+  const x = -halfW + ICON_EDGE_MARGIN + iconHalfWidth;
+  return { x, scale };
+}
+
 // ── 3D works gallery ────────────────────────────────────────────────────────
 // The actual Finder window (glass panel, titlebar, grid) floats as ONE panel in
 // front of the Buddha (the side it faces), facing the gallery camera (faceY) so
@@ -90,6 +110,19 @@ export const GALLERY = {
   scale: 0.2,
   /** Y rotation (radians) so the window faces the gallery camera on the far side. */
   faceY: Math.PI,
+};
+
+// ── 3D works cloud ──────────────────────────────────────────────────────────
+// The works are free-floating ".mov" files scattered in a loose cloud around the
+// gallery center (no Finder window). They fly out from the center on open and
+// drift subtly while hovered. All tunable.
+export const CLOUD = {
+  /** Half-extents of the scatter volume around GALLERY.center, [x, y, z]. */
+  spread: [1.5, 0.9, 0.95] as [number, number, number],
+  /** Html `transform` scale per file (on-screen world width ≈ panelPx × scale / 40). */
+  scale: 0.16,
+  /** World amplitude of the very subtle particle drift while a file is hovered. */
+  driftAmplitude: 0.035,
 };
 
 // How far in front of a clicked file the camera sits before the video opens.

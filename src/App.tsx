@@ -39,6 +39,10 @@ export default function App() {
   const [windowState, setWindowState] = useState<WindowState>({ type: 'none' });
   const [selectedIcon, setSelectedIcon] = useState<SelectedIcon>(null);
   const [origin, setOrigin] = useState<IconClickOrigin | null>(null);
+  // Works cloud lifecycle, separate from windowState so the files can fly back
+  // *into* the folder on close: 'open' (spilled out), 'closing' (flying back —
+  // still mounted), 'closed' (unmounted).
+  const [worksPhase, setWorksPhase] = useState<'open' | 'closing' | 'closed'>('closed');
   const [isMobile, setIsMobile] = useState(false);
   // The camera target key the rig has actually finished settling into, or null
   // while a move is in progress. Used to delay revealing the video until the
@@ -62,8 +66,9 @@ export default function App() {
   }, []);
 
   function openWindow(icon: SelectedIcon, clickOrigin: IconClickOrigin) {
-    // Click on currently-selected icon (except Finder) toggles it closed.
-    if (selectedIcon === icon && windowState.type !== 'finder') {
+    // Click on the currently-selected icon toggles it closed. The works cloud has
+    // no window chrome / close button, so the folder icon is its toggle too.
+    if (selectedIcon === icon) {
       setSelectedIcon(null);
       setWindowState({ type: 'none' });
       return;
@@ -113,14 +118,36 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [windowState.type]);
 
+  // Drive the works cloud lifecycle off windowState. Opening the folder (finder /
+  // its video) keeps it 'open'; returning to rest flips it to 'closing' so the
+  // files fly back into the folder before unmounting; switching to another window
+  // drops it immediately.
+  useEffect(() => {
+    const t = windowState.type;
+    if (t === 'finder' || t === 'quicktime') setWorksPhase('open');
+    else if (t === 'none') setWorksPhase((prev) => (prev === 'open' ? 'closing' : prev));
+    else setWorksPhase('closed');
+  }, [windowState.type]);
+
+  // Unmount the cloud once the fly-back finishes. Allow for the per-file stagger
+  // (delay = i * 0.05s) plus the damp settle, so the last file fully tucks in.
+  useEffect(() => {
+    if (worksPhase !== 'closing') return;
+    const closeMs = (works.length - 1) * 50 + 650;
+    const t = window.setTimeout(() => setWorksPhase('closed'), closeMs);
+    return () => window.clearTimeout(t);
+  }, [worksPhase]);
+
   const selectedWorkId = windowState.type === 'quicktime' ? windowState.work.id : undefined;
 
   // The 3D window panel mounted in the gallery center, derived from state. The
   // Finder (and the video opened from it) shows the works grid; contact/readme
   // show a text panel — all of them swing the camera into the gallery.
   let panel: Panel3DSpec | null = null;
-  if (windowState.type === 'finder' || windowState.type === 'quicktime') {
-    panel = { kind: 'finder', works, selectedWorkId, onSelect: openWorkFromFinder, onClose: closeAll };
+  if (worksPhase !== 'closed') {
+    // Mounted while open AND during the close fly-back; `open` flips false on close
+    // so the files reverse back into the folder before the cloud unmounts.
+    panel = { kind: 'finder', works, selectedWorkId, open: worksPhase === 'open', onSelect: openWorkFromFinder };
   } else if (windowState.type === 'contact') {
     panel = { kind: 'text', title: 'contact.txt', content: contactText, onClose: closeAll };
   } else if (windowState.type === 'readme') {

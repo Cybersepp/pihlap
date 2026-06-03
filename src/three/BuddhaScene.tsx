@@ -3,9 +3,9 @@ import { Canvas } from '@react-three/fiber';
 import { Buddha } from './Buddha';
 import { CameraRig } from './CameraRig';
 import { DesktopIcons3D, SceneIcon } from './DesktopIcons3D';
-import { WorksFinder3D } from './WorksFinder3D';
+import { WorksReveal3D } from './WorksReveal3D';
 import { TextPanel3D } from './TextPanel3D';
-import { CameraTarget } from './poses';
+import { CameraTarget, SCENE_FOV } from './poses';
 import { Work } from '../data/works';
 import { IconClickOrigin } from '../components/DesktopIcon';
 
@@ -15,8 +15,9 @@ export type Panel3DSpec =
       kind: 'finder';
       works: Work[];
       selectedWorkId?: string;
+      /** false during close, so the files fly back into the folder before unmount. */
+      open: boolean;
       onSelect: (work: Work, origin: IconClickOrigin, world: [number, number, number]) => void;
-      onClose: () => void;
     }
   | { kind: 'text'; title: string; content: string; onClose: () => void };
 
@@ -42,7 +43,7 @@ export function BuddhaScene({ target, isMobile, icons, panel, onSettle, orbitEna
       <Canvas
         gl={{ antialias: true, alpha: true, preserveDrawingBuffer: false }}
         dpr={isMobile ? [1, 1.5] : [1, 2]}
-        camera={{ fov: 32, near: 0.1, far: 100, position: [0, 0.15, 4.3] }}
+        camera={{ fov: SCENE_FOV, near: 0.1, far: 100, position: [0, 0, 7] }}
       >
         <ambientLight intensity={0.65} />
         {/* Key light, front-right and high. */}
@@ -57,11 +58,11 @@ export function BuddhaScene({ target, isMobile, icons, panel, onSettle, orbitEna
         <DesktopIcons3D icons={icons} />
 
         {panel?.kind === 'finder' && (
-          <WorksFinder3D
+          <WorksReveal3D
             works={panel.works}
             selectedWorkId={panel.selectedWorkId}
+            open={panel.open}
             onSelect={panel.onSelect}
-            onClose={panel.onClose}
           />
         )}
 
