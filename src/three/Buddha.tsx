@@ -1,76 +1,87 @@
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useGLTF, Center } from '@react-three/drei';
+import { useFrame } from '@react-three/fiber';
 import { TARGET_SIZE, MODEL_ROTATION } from './poses';
+import { MaterialSettings, DEFAULT_MATERIAL_SETTINGS, buildModelMaterial } from './materialSettings';
 
 const MODEL_URL = `${import.meta.env.BASE_URL}pihlap.glb`;
 
-// ── Matcap clay ──────────────────────────────────────────────────────────────
-// The model wears a single matte "clay" matcap: studio lighting baked straight
-// into the surface, so it renders identically on every device and needs no scene
-// lights. The matcap is generated procedurally on a canvas (a warm radial sphere
-// lit from the upper-left, with a soft specular hotspot) — no fetched texture.
-let clayMatcap: THREE.Texture | null = null;
-function getClayMatcap(): THREE.Texture {
-  if (clayMatcap) return clayMatcap;
-  const s = 256;
-  const c = document.createElement('canvas');
-  c.width = c.height = s;
-  const ctx = c.getContext('2d')!;
-  ctx.fillStyle = '#3a241b';
-  ctx.fillRect(0, 0, s, s);
-  // Main diffuse sphere, lit from the upper-left.
-  const g = ctx.createRadialGradient(s * 0.36, s * 0.3, s * 0.04, s * 0.5, s * 0.5, s * 0.56);
-  g.addColorStop(0, '#f3dcc0');
-  g.addColorStop(0.35, '#cd8a5f');
-  g.addColorStop(0.75, '#8a4c30');
-  g.addColorStop(1, '#3a241b');
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.arc(s / 2, s / 2, s / 2, 0, Math.PI * 2);
-  ctx.fill();
-  // Tight specular hotspot.
-  const h = ctx.createRadialGradient(s * 0.34, s * 0.28, 0, s * 0.34, s * 0.28, s * 0.18);
-  h.addColorStop(0, 'rgba(255,248,235,0.85)');
-  h.addColorStop(1, 'rgba(255,248,235,0)');
-  ctx.fillStyle = h;
-  ctx.fillRect(0, 0, s, s);
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  clayMatcap = tex;
-  return tex;
-}
+// Warm tone the surface heats up to on the break.
+const GLOW_COLOR = '#ffd98a';
 
-// The Buddha figure. Loaded from the GLB, recentered to the origin and scaled so
-// its largest dimension is TARGET_SIZE units. It is completely immobile — no
-// idle animation, no rotation — so at rest the scene is indistinguishable from a
-// flat 2D image. The "wow" comes entirely from the camera move.
-export function Buddha() {
+// The figure. Its base material comes from `settings` (matcap clay by default, but
+// live-swappable via the dev panel). On the 4th-wall break (`broken`) an additive
+// warm shell fades in over it, heating it toward a sun glow, then cools on return.
+// Otherwise it's completely immobile, so at rest the scene reads as a flat 2D image.
+export function Buddha({
+  broken = false,
+  settings = DEFAULT_MATERIAL_SETTINGS,
+}: {
+  broken?: boolean;
+  settings?: MaterialSettings;
+}) {
   const { scene } = useGLTF(MODEL_URL);
 
-  const scale = useMemo(() => {
-    const box = new THREE.Box3().setFromObject(scene);
-    const size = box.getSize(new THREE.Vector3());
+  // Scene-derived bits that don't depend on the material settings.
+  const { scale, box, glow, glowMaterial } = useMemo(() => {
+    const b = new THREE.Box3().setFromObject(scene);
+    const size = b.getSize(new THREE.Vector3());
     const maxDim = Math.max(size.x, size.y, size.z) || 1;
 
-    // One shared clay-matcap material for every mesh, overriding whatever the GLB
-    // shipped with.
-    const clay = new THREE.MeshMatcapMaterial({ matcap: getClayMatcap() });
-    scene.traverse((obj) => {
+    // A concentric copy rendered with an additive warm material — fading it in
+    // brightens the surface toward a glowing sun-warm tone without a hard swap.
+    const glowClone = scene.clone(true);
+    const mat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(GLOW_COLOR),
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    glowClone.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
-      if (mesh.isMesh) {
-        mesh.material = clay;
-      }
+      if (mesh.isMesh) mesh.material = mat;
     });
 
-    return TARGET_SIZE / maxDim;
+    return { scale: TARGET_SIZE / maxDim, box: b, glow: glowClone, glowMaterial: mat };
   }, [scene]);
 
+  // Base material is rebuilt and reassigned live whenever the dev settings change.
+  // Disposing the previous one keeps repeated tweaking from leaking GPU resources.
+  const prevBase = useRef<THREE.Material | null>(null);
+  useMemo(() => {
+    const base = buildModelMaterial(settings, box);
+    scene.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (mesh.isMesh) mesh.material = base;
+    });
+    const prev = prevBase.current as THREE.MeshMatcapMaterial | null;
+    if (prev && prev !== base) {
+      prev.matcap?.dispose?.();
+      prev.dispose();
+    }
+    prevBase.current = base;
+  }, [scene, box, settings]);
+
+  // Eased 0→1 "heat" that follows the break, driving the glow shell.
+  const heat = useRef(0);
+  useFrame((_, dt) => {
+    heat.current = THREE.MathUtils.damp(heat.current, broken ? 1 : 0, 3, Math.min(dt, 0.05));
+    glowMaterial.opacity = heat.current;
+  });
+
   return (
-    <group rotation={MODEL_ROTATION}>
-      <Center scale={scale}>
-        <primitive object={scene} />
-      </Center>
+    <group>
+      <group rotation={MODEL_ROTATION}>
+        <Center scale={scale}>
+          <primitive object={scene} />
+          {/* Slightly enlarged additive shell so the glow bleeds past the silhouette. */}
+          <group scale={1.02}>
+            <primitive object={glow} />
+          </group>
+        </Center>
+      </group>
     </group>
   );
 }

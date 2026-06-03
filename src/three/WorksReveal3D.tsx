@@ -1,21 +1,23 @@
-import { MouseEvent, useMemo, useRef, useState } from 'react';
+import { MouseEvent, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { Html } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Work } from '../data/works';
 import { MovIcon } from '../components/Icons';
 import { IconClickOrigin } from '../components/DesktopIcon';
-import { CLOUD, GALLERY, ICON_ROWS_Y, iconColumnLayout } from './poses';
+import { CLOUD, ORBIT, ICON_ROWS_Y, iconColumnLayout } from './poses';
 
 export interface WorksReveal3DProps {
   works: Work[];
   selectedWorkId?: string;
-  /** true = files spill out to the cloud; false = they fly back into the folder. */
+  /** true = files spill out of the folder into orbit; false = they fly back in. */
   open: boolean;
+  /** true while a video is open — the orbits ease to a clean stop, then resume. */
+  paused: boolean;
   onSelect: (work: Work, origin: IconClickOrigin, world: [number, number, number]) => void;
 }
 
-// Deterministic PRNG so the cloud scatter is stable across renders.
+// Deterministic PRNG so each file's orbit is stable across renders.
 function mulberry32(seed: number) {
   let a = seed;
   return () => {
@@ -27,93 +29,109 @@ function mulberry32(seed: number) {
   };
 }
 
-// Loose 3D scatter offsets around the gallery center (the cloud "to" targets).
-function cloudOffsets(n: number): [number, number, number][] {
-  const rng = mulberry32(0x5eed);
-  const cols = Math.max(1, Math.ceil(Math.sqrt(n * 1.7)));
-  const rows = Math.max(1, Math.ceil(n / cols));
-  const out: [number, number, number][] = [];
+interface OrbitParams {
+  radius: number;
+  baseAngle: number;
+  height: number;
+  tilt: number;
+  speed: number;
+}
+
+// One orbit per file: spread the start angles evenly, then jitter radius, height,
+// plane tilt and speed so the files form a loose orbital system, not a flat ring.
+function makeOrbits(n: number): OrbitParams[] {
+  const rng = mulberry32(0x0a1b2c3d);
+  const out: OrbitParams[] = [];
   for (let i = 0; i < n; i++) {
-    const c = i % cols;
-    const r = Math.floor(i / cols);
-    const bx = cols > 1 ? (c / (cols - 1)) * 2 - 1 : 0;
-    const by = rows > 1 ? (r / (rows - 1)) * 2 - 1 : 0;
-    const jx = (rng() * 2 - 1) * (1.3 / cols);
-    const edgeY = Math.abs(by);
-    const jy = (rng() * 2 - 1) * (1.3 / rows) * (1 - edgeY * 0.5);
-    const yNorm = Math.min(by * 0.82 + jy, 0.86);
-    out.push([
-      (bx * 0.9 + jx) * CLOUD.spread[0],
-      yNorm * CLOUD.spread[1],
-      (rng() * 2 - 1) * CLOUD.spread[2],
-    ]);
+    out.push({
+      radius: ORBIT.radius * (1 - ORBIT.radiusJitter / 2 + rng() * ORBIT.radiusJitter),
+      baseAngle: (i / Math.max(n, 1)) * Math.PI * 2 + (rng() - 0.5),
+      height: (rng() - 0.5) * ORBIT.heightJitter,
+      tilt: (rng() - 0.5) * ORBIT.tilt,
+      speed: ORBIT.speed * (1 - ORBIT.speedJitter / 2 + rng() * ORBIT.speedJitter),
+    });
   }
   return out;
 }
 
 const tmp = new THREE.Vector3();
 
-// One floating ".mov" file. It starts (tiny, hidden) at the folder icon and, after
-// a staggered delay, flies out to its cloud position, growing in as it goes — so
-// the files spill out of the folder. Billboarded to the camera so it always reads
-// head-on, through the swing and the settled gallery view.
-function CloudItem({
+// The file's position on its (tilted) orbit at a given accumulated angle. Driving
+// off an accumulated angle (rather than absolute time) lets us ease the orbit
+// speed up and down — so it can halt cleanly and resume from where it stopped.
+function orbitAt(out: THREE.Vector3, p: OrbitParams, angle: number) {
+  const lx = Math.cos(angle) * p.radius;
+  const lz = Math.sin(angle) * p.radius;
+  const ly = p.height;
+  const ct = Math.cos(p.tilt);
+  const st = Math.sin(p.tilt);
+  out.set(
+    ORBIT.center[0] + lx,
+    ORBIT.center[1] + (ly * ct - lz * st),
+    ORBIT.center[2] + (ly * st + lz * ct),
+  );
+}
+
+// One floating ".mov" file. Starts (tiny, hidden) at the folder icon; after its
+// stagger delay it eases out and tracks its live orbit point, so it spills out of
+// the folder and into a slow orbit. Billboarded to the camera so it always reads
+// head-on. On close it reverses the same way, back into the folder.
+function OrbitItem({
   work,
   from,
-  to,
+  params,
   delay,
   open,
+  paused,
   selected,
   onSelect,
 }: {
   work: Work;
   from: [number, number, number];
-  to: [number, number, number];
+  params: OrbitParams;
   delay: number;
   open: boolean;
+  paused: boolean;
   selected: boolean;
   onSelect: WorksReveal3DProps['onSelect'];
 }) {
   const group = useRef<THREE.Group>(null);
-  const prog = useRef(0); // 0 = inside the folder, 1 = settled in the cloud
+  const prog = useRef(0); // 0 = in the folder, 1 = out on the orbit
   const clock = useRef(0); // time since the current open/close began (for stagger)
   const prevOpen = useRef(open);
-  const driftAmt = useRef(0);
-  const [hovered, setHovered] = useState(false);
-  const phases = useMemo(
-    () => [Math.random() * 7, Math.random() * 7, Math.random() * 7] as const,
-    [],
-  );
+  const angle = useRef(params.baseAngle); // accumulated orbit angle
+  const speedFactor = useRef(1); // eases 1→0 when paused (video open), back on resume
 
   useFrame((state, dt) => {
     const g = group.current;
     if (!g) return;
     const d = Math.min(dt, 0.05);
 
-    // Reset the stagger clock whenever the direction flips, so the fly-back
-    // cascades file-by-file (after each file's delay) exactly like the spill-out,
-    // instead of every file returning to the folder at once.
+    // Reset the stagger clock on each direction flip, so the fly-back cascades
+    // file-by-file just like the spill-out.
     if (open !== prevOpen.current) {
       prevOpen.current = open;
       clock.current = 0;
     }
     clock.current += d;
 
-    // Each file waits out its stagger delay, then heads to its target: the cloud
-    // when open, back into the folder when closing.
     const past = clock.current > delay;
     const target = open ? (past ? 1 : 0) : past ? 0 : 1;
     prog.current = THREE.MathUtils.damp(prog.current, target, 6, d);
     const p = prog.current;
 
-    driftAmt.current = THREE.MathUtils.damp(driftAmt.current, hovered ? 1 : 0, 4, d);
-    const t = state.clock.elapsedTime;
-    const a = driftAmt.current * CLOUD.driftAmplitude;
+    // Ease the orbit speed to a clean stop while a video is open, and back up on
+    // exit, advancing the accumulated angle by the current (eased) speed.
+    speedFactor.current = THREE.MathUtils.damp(speedFactor.current, paused ? 0 : 1, 3.5, d);
+    angle.current += params.speed * speedFactor.current * d;
 
+    // Lerp between the folder and the file's live orbit point, so once settled it
+    // rides the orbit, and while spilling out it heads toward where the orbit is.
+    orbitAt(tmp, params, angle.current);
     tmp.set(
-      from[0] + (to[0] - from[0]) * p + Math.sin(t * 0.9 + phases[0]) * a,
-      from[1] + (to[1] - from[1]) * p + Math.cos(t * 0.7 + phases[1]) * a,
-      from[2] + (to[2] - from[2]) * p + Math.sin(t * 1.1 + phases[2]) * a,
+      from[0] + (tmp.x - from[0]) * p,
+      from[1] + (tmp.y - from[1]) * p,
+      from[2] + (tmp.z - from[2]) * p,
     );
     g.position.copy(tmp);
     g.lookAt(state.camera.position);
@@ -121,7 +139,12 @@ function CloudItem({
   });
 
   function handleClick(e: MouseEvent<HTMLDivElement>) {
-    onSelect(work, { x: e.clientX, y: e.clientY }, [to[0], to[1], to[2]]);
+    // Fly to wherever the file currently is on its orbit.
+    const g = group.current;
+    const world: [number, number, number] = g
+      ? [g.position.x, g.position.y, g.position.z]
+      : [from[0], from[1], from[2]];
+    onSelect(work, { x: e.clientX, y: e.clientY }, world);
   }
 
   return (
@@ -131,13 +154,22 @@ function CloudItem({
           className={`cloud-item${selected ? ' is-selected' : ''}`}
           style={{ backfaceVisibility: 'hidden', pointerEvents: 'auto' }}
           onClick={handleClick}
-          onPointerEnter={() => setHovered(true)}
-          onPointerLeave={() => setHovered(false)}
           role="button"
           tabIndex={0}
         >
           <div className="cloud-item-glyph">
-            <MovIcon size={60} />
+            {work.icon ? (
+              <img
+                src={work.icon}
+                alt=""
+                width={64}
+                height={64}
+                draggable={false}
+                style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+              />
+            ) : (
+              <MovIcon size={60} />
+            )}
           </div>
           <span className="cloud-item-label">{work.title}</span>
         </div>
@@ -146,33 +178,30 @@ function CloudItem({
   );
 }
 
-// The works gallery: the ".mov" files fly out of the "selected works" folder icon
-// and settle into a loose 3D cloud around the gallery center. Clicking a settled
-// file pans the camera to it (then App opens the video).
-export function WorksReveal3D({ works, selectedWorkId, open, onSelect }: WorksReveal3DProps) {
+// The works gallery: the ".mov" files spill out of the "selected works" folder
+// icon and settle into slow orbits around the figure. Clicking one flies the
+// camera to its current orbit position (then App opens the video).
+export function WorksReveal3D({ works, selectedWorkId, open, paused, onSelect }: WorksReveal3DProps) {
   const size = useThree((s) => s.size);
   const aspect = size.width / size.height || 1;
 
-  // The folder icon's world position (the top icon in the column) — the spill source.
+  // The folder icon's world position (top icon in the column) — the spill source.
   const { x: folderX } = iconColumnLayout(aspect);
   const from: [number, number, number] = [folderX, ICON_ROWS_Y[0] ?? 0, 0];
 
-  const clouds = useMemo(() => cloudOffsets(works.length), [works.length]);
+  const orbits = useMemo(() => makeOrbits(works.length), [works.length]);
 
   return (
     <>
       {works.map((work, i) => (
-        <CloudItem
+        <OrbitItem
           key={work.id}
           work={work}
           from={from}
-          to={[
-            GALLERY.center[0] + clouds[i][0],
-            GALLERY.center[1] + clouds[i][1],
-            GALLERY.center[2] + clouds[i][2],
-          ]}
+          params={orbits[i]}
           delay={i * 0.05}
           open={open}
+          paused={paused}
           selected={selectedWorkId === work.id}
           onSelect={onSelect}
         />

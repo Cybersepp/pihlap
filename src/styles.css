@@ -66,8 +66,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-  /* Fallback while the .sky backdrop paints (also the bottom horizon tone). */
-  background: #eaf1fb;
+  background: #fff;
   user-select: none;
 }
 
@@ -76,66 +75,110 @@ body {
    Fixed, full-screen, behind the 3D canvas (z 1) and windows (z 100).
    Soft vertical gradient + two layers of blurred, slow-drifting clouds.
    ============================================================ */
+/* ============================================================
+   DEV-ONLY material lab panel (never ships to production)
+   ============================================================ */
+.dev-panel {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 999;
+  width: 224px;
+  padding: 10px 12px 11px;
+  background: rgba(20, 20, 24, 0.86);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  color: #e8e8ea;
+  font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.dev-panel-title {
+  font-weight: 600;
+  opacity: 0.65;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+}
+.dev-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.dev-row > span:first-child {
+  opacity: 0.8;
+}
+.dev-row select {
+  color: #e8e8ea;
+  background: #222227;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 5px;
+  padding: 2px 4px;
+}
+.dev-row input[type="color"] {
+  width: 34px;
+  height: 20px;
+  border: none;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+}
+.dev-row input[type="range"] {
+  flex: 1;
+  accent-color: #d9a066;
+}
+.dev-val {
+  width: 30px;
+  text-align: right;
+  opacity: 0.6;
+}
+.dev-hint {
+  margin-top: 2px;
+  font-size: 10.5px;
+  opacity: 0.45;
+  line-height: 1.3;
+}
+
+/* Studio backdrop. Sits directly above the cloudy sky (same layer, later in the
+   DOM) and below the 3D canvas; fades in on the 4th-wall break so the world turns
+   into a dark film-studio cyclorama — a soft pool of dark grey up top falling off
+   to near-black — then fades back out on return to rest. */
+.studio {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 800ms ease;
+  background:
+    radial-gradient(135% 105% at 50% 28%, #2c2d31 0%, #1c1d20 34%, #101012 64%, #0a0a0b 100%);
+}
+
+.studio.is-visible {
+  opacity: 1;
+}
+
+/* Faint film grain / matte-stone texture so the gradient doesn't read as a flat
+   digital wash. Fades together with the backdrop (inherits the parent opacity). */
+.studio::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: 0.05;
+  mix-blend-mode: soft-light;
+  pointer-events: none;
+}
+
 .sky {
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  overflow: hidden;
-  background: linear-gradient(
-    180deg,
-    #aecdf2 0%,
-    #c4dbf6 26%,
-    #dfecfb 55%,
-    #f1eef0 82%,
-    #f7efe8 100%
-  );
-}
-
-/* Two cloud layers drifting at different speeds for a sense of depth. */
-.sky::before,
-.sky::after {
-  content: '';
-  position: absolute;
-  /* Oversized + offset so the blur and drift never reveal hard edges. */
-  inset: -25%;
-  background-repeat: no-repeat;
-  filter: blur(34px);
-  will-change: transform;
-}
-
-.sky::before {
-  background-image:
-    radial-gradient(38% 26% at 18% 28%, rgba(255, 255, 255, 0.92), transparent 62%),
-    radial-gradient(32% 22% at 62% 18%, rgba(255, 255, 255, 0.85), transparent 60%),
-    radial-gradient(46% 30% at 82% 48%, rgba(255, 255, 255, 0.8), transparent 62%),
-    radial-gradient(30% 20% at 40% 58%, rgba(255, 255, 255, 0.7), transparent 60%);
-  opacity: 0.9;
-  animation: sky-drift-a 70s ease-in-out infinite alternate;
-}
-
-.sky::after {
-  background-image:
-    radial-gradient(42% 24% at 30% 70%, rgba(255, 255, 255, 0.7), transparent 62%),
-    radial-gradient(30% 20% at 75% 78%, rgba(255, 255, 255, 0.6), transparent 60%),
-    radial-gradient(34% 22% at 8% 60%, rgba(255, 255, 255, 0.65), transparent 60%);
-  opacity: 0.75;
-  animation: sky-drift-b 95s ease-in-out infinite alternate;
-}
-
-@keyframes sky-drift-a {
-  from { transform: translate3d(-2%, 0, 0) scale(1.02); }
-  to   { transform: translate3d(4%, -1.5%, 0) scale(1.08); }
-}
-
-@keyframes sky-drift-b {
-  from { transform: translate3d(3%, 1%, 0) scale(1.05); }
-  to   { transform: translate3d(-3%, -1%, 0) scale(1); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .sky::before,
-  .sky::after { animation: none; }
+  background: #fff;
 }
 
 button { font: inherit; color: inherit; }

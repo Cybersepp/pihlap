@@ -6,6 +6,7 @@ import { DesktopIcons3D, SceneIcon } from './DesktopIcons3D';
 import { WorksReveal3D } from './WorksReveal3D';
 import { TextPanel3D } from './TextPanel3D';
 import { CameraTarget, SCENE_FOV } from './poses';
+import { MaterialSettings } from './materialSettings';
 import { Work } from '../data/works';
 import { IconClickOrigin } from '../components/DesktopIcon';
 
@@ -17,6 +18,8 @@ export type Panel3DSpec =
       selectedWorkId?: string;
       /** false during close, so the files fly back into the folder before unmount. */
       open: boolean;
+      /** true while a video is open — the orbits halt cleanly, then resume. */
+      paused: boolean;
       onSelect: (work: Work, origin: IconClickOrigin, world: [number, number, number]) => void;
     }
   | { kind: 'text'; title: string; content: string; onClose: () => void };
@@ -30,6 +33,10 @@ interface BuddhaSceneProps {
   onSettle?: (key: string | null) => void;
   /** User may orbit around the gallery panel (after the swing settles). */
   orbitEnabled?: boolean;
+  /** True once the camera has broken away from rest — heats the figure into its glow. */
+  broken?: boolean;
+  /** Live material settings from the dev panel (defaults applied in production). */
+  materialSettings?: MaterialSettings;
 }
 
 // Full-screen transparent 3D layer that replaces the old corner portrait.
@@ -37,7 +44,7 @@ interface BuddhaSceneProps {
 // the Buddha + lighting + the camera rig, plus the world-anchored desktop icons
 // and (while a window is open) a 3D window panel floating in the gallery center.
 // Lighting is a simple three-point rig (no HDRI / network dependency).
-export function BuddhaScene({ target, isMobile, icons, panel, onSettle, orbitEnabled }: BuddhaSceneProps) {
+export function BuddhaScene({ target, isMobile, icons, panel, onSettle, orbitEnabled, broken, materialSettings }: BuddhaSceneProps) {
   return (
     <div className="scene-canvas">
       <Canvas
@@ -52,7 +59,7 @@ export function BuddhaScene({ target, isMobile, icons, panel, onSettle, orbitEna
         <directionalLight position={[-4, 2.5, -3.5]} intensity={0.7} />
 
         <Suspense fallback={null}>
-          <Buddha />
+          <Buddha broken={!!broken} settings={materialSettings} />
         </Suspense>
 
         <DesktopIcons3D icons={icons} />
@@ -62,6 +69,7 @@ export function BuddhaScene({ target, isMobile, icons, panel, onSettle, orbitEna
             works={panel.works}
             selectedWorkId={panel.selectedWorkId}
             open={panel.open}
+            paused={panel.paused}
             onSelect={panel.onSelect}
           />
         )}

@@ -15,6 +15,7 @@ import {
   type CameraTarget,
 } from './three/poses';
 import { works, Work } from './data/works';
+import { MaterialSettings, DEFAULT_MATERIAL_SETTINGS } from './three/materialSettings';
 import { contactText, readMeText } from './data/content';
 import { shouldUseMobileLayout } from './lib/device';
 
@@ -23,6 +24,12 @@ import { shouldUseMobileLayout } from './lib/device';
 const BuddhaScene = lazy(() =>
   import('./three/BuddhaScene').then((m) => ({ default: m.BuddhaScene })),
 );
+
+// Dev-only live material lab. Gated on import.meta.env.DEV so the dynamic import
+// is dead-code-eliminated from production builds — it only runs under `npm run dev`.
+const DevMaterialControls = import.meta.env.DEV
+  ? lazy(() => import('./dev/MaterialControls').then((m) => ({ default: m.MaterialControls })))
+  : null;
 
 type WindowState =
   | { type: 'none' }
@@ -44,6 +51,8 @@ export default function App() {
   // still mounted), 'closed' (unmounted).
   const [worksPhase, setWorksPhase] = useState<'open' | 'closing' | 'closed'>('closed');
   const [isMobile, setIsMobile] = useState(false);
+  // Live model material, edited via the dev-only panel (defaults in production).
+  const [materialSettings, setMaterialSettings] = useState<MaterialSettings>(DEFAULT_MATERIAL_SETTINGS);
   // The camera target key the rig has actually finished settling into, or null
   // while a move is in progress. Used to delay revealing the video until the
   // camera reaches the focused tile — never trusting a stale destination.
@@ -147,7 +156,14 @@ export default function App() {
   if (worksPhase !== 'closed') {
     // Mounted while open AND during the close fly-back; `open` flips false on close
     // so the files reverse back into the folder before the cloud unmounts.
-    panel = { kind: 'finder', works, selectedWorkId, open: worksPhase === 'open', onSelect: openWorkFromFinder };
+    panel = {
+      kind: 'finder',
+      works,
+      selectedWorkId,
+      open: worksPhase === 'open',
+      paused: windowState.type === 'quicktime',
+      onSelect: openWorkFromFinder,
+    };
   } else if (windowState.type === 'contact') {
     panel = { kind: 'text', title: 'contact.txt', content: contactText, onClose: closeAll };
   } else if (windowState.type === 'readme') {
@@ -170,6 +186,11 @@ export default function App() {
     // finder / contact / readme all swing behind the Buddha to the gallery view.
     cameraTarget = { key: 'gallery', spec: poseSet.gallery };
   }
+
+  // "Broken": the camera has left rest (any window open), so the cloudy desktop
+  // backdrop crossfades to deep space and the starfield fades in. Returning to
+  // rest reverses it.
+  const broken = windowState.type !== 'none';
 
   // The DOM video only opens once the camera has actually arrived in front of the
   // focused tile (settledKey matches) — never early during the fly-in.
@@ -216,6 +237,8 @@ export default function App() {
     <>
       {/* Dreamy cloudy sky backdrop — sits behind everything. */}
       <div className="sky" aria-hidden="true" />
+      {/* Dark studio backdrop, crossfaded in over the sky once the 4th wall breaks. */}
+      <div className={`studio${broken ? ' is-visible' : ''}`} aria-hidden="true" />
 
       {/* 3D Buddha + world-anchored icons + (while a window is open) its 3D panel. */}
       <Suspense fallback={null}>
@@ -226,6 +249,8 @@ export default function App() {
           panel={panel}
           onSettle={setSettledKey}
           orbitEnabled={settledKey === 'gallery'}
+          broken={broken}
+          materialSettings={materialSettings}
         />
       </Suspense>
 
@@ -241,6 +266,13 @@ export default function App() {
           />
         )}
       </AnimatePresence>
+
+      {/* Dev-only live material lab (never mounts in production). */}
+      {DevMaterialControls && (
+        <Suspense fallback={null}>
+          <DevMaterialControls settings={materialSettings} onChange={setMaterialSettings} />
+        </Suspense>
+      )}
     </>
   );
 }

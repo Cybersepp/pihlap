@@ -13,6 +13,8 @@ export interface Work {
   loopUrl: string;
   fullPieceUrl: string;
   vimeoUrl?: string;
+  /** Optional custom floating-icon image (public path). Falls back to the .mov glyph. */
+  icon?: string;
 }
 
 export const works: Work[] = [
@@ -66,6 +68,7 @@ export const works: Work[] = [
     loopUrl: publicAsset("loops/jessica-posted.mp4"),
     fullPieceUrl: "https://vimeo.com/1002265424",
     vimeoUrl: "https://vimeo.com/1002265424",
+    icon: publicAsset("lada.png"),
   },
   {
     id: "kai-angel-prada-party",

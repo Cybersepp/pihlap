@@ -25,7 +25,7 @@ export interface CameraTarget {
 // farther out). The gallery camera looks here AND the panel is centered here —
 // they share this one constant so they always stay consistent. Tune this to move
 // the whole gallery; tune POSES.gallery.position to move the camera viewpoint.
-export const GALLERY_CENTER: [number, number, number] = [0, 1, 1.7];
+export const GALLERY_CENTER: [number, number, number] = [0, 1, 0];
 
 // Static named poses.
 //  - `rest`    : the "2D website" framing — Buddha facing the viewer. No 3D hint.
@@ -123,6 +123,25 @@ export const CLOUD = {
   scale: 0.16,
   /** World amplitude of the very subtle particle drift while a file is hovered. */
   driftAmplitude: 0.035,
+};
+
+// ── Orbiting works ───────────────────────────────────────────────────────────
+// Instead of freezing into a static cloud, the files settle into slow orbits
+// around the figure — each on its own radius, height, tilted plane, phase and
+// speed, so it reads as a loose orbital system rather than a flat ring. Tune live.
+export const ORBIT = {
+  /** Point the files orbit around (shared with the gallery camera target). */
+  center: GALLERY_CENTER,
+  /** Base orbital radius and the +/- random spread applied per file. */
+  radius: 2,
+  radiusJitter: 1,
+  /** Vertical spread of the orbits, so they don't all sit in one plane. */
+  heightJitter: 1,
+  /** Max random tilt of each file's orbital plane (radians). */
+  tilt: 0.6,
+  /** Base angular speed (rad/s) and the per-file random multiplier spread. */
+  speed: 0.08,
+  speedJitter: 0.4,
 };
 
 // How far in front of a clicked file the camera sits before the video opens.
