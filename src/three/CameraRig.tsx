@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { CameraControls } from '@react-three/drei';
 import CameraControlsImpl from 'camera-controls';
-import { CAMERA_SMOOTH_TIME, CameraTarget, GALLERY_CENTER } from './poses';
+import { CAMERA_SMOOTH_TIME, CameraTarget } from './poses';
 
 const { ACTION } = CameraControlsImpl;
 
@@ -13,20 +13,23 @@ interface CameraRigProps {
    * gate UI on "actually arrived" without trusting a stale last-known pose.
    */
   onSettle?: (key: string | null) => void;
-  /** After the gallery swing finishes, allow drag / pinch orbit around `orbitCenter`. */
+  /**
+   * Allow drag / pinch orbit. Enabled as soon as the gallery is the destination
+   * (the moment the swing begins, in sync with the backdrop crossfade) rather
+   * than waiting for it to settle — the auto setLookAt swing keeps running until
+   * the user actually grabs it.
+   */
   orbitEnabled?: boolean;
-  orbitCenter?: [number, number, number];
 }
 
 // Drives the camera to whatever target it's given. We keep the controller
 // *enabled* so its per-frame update() runs and animates our setLookAt transitions
-// (drei only calls update() when enabled). Gestures are off at rest and during
-// animated moves; in the settled gallery view the user can orbit around the panel.
+// (drei only calls update() when enabled). Gestures are off at rest and while
+// flying to a focused tile; when the gallery is the destination the user may orbit.
 export function CameraRig({
   target,
   onSettle,
   orbitEnabled = false,
-  orbitCenter = GALLERY_CENTER,
 }: CameraRigProps) {
   const controls = useRef<CameraControls>(null);
   // First target snaps into place (no transition); later changes animate.
@@ -70,12 +73,6 @@ export function CameraRig({
     // Re-run only when the destination key changes (spec is derived from key).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
-
-  useEffect(() => {
-    const c = controls.current;
-    if (!c || !orbitEnabled) return;
-    c.setTarget(orbitCenter[0], orbitCenter[1], orbitCenter[2], false);
-  }, [orbitEnabled, orbitCenter]);
 
   const blocked = { left: ACTION.NONE, middle: ACTION.NONE, right: ACTION.NONE, wheel: ACTION.NONE };
   const orbitMouse = {

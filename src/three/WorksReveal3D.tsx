@@ -1,4 +1,4 @@
-import { MouseEvent, useMemo, useRef } from 'react';
+import { MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { Html } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber';
@@ -55,6 +55,7 @@ function makeOrbits(n: number): OrbitParams[] {
 }
 
 const tmp = new THREE.Vector3();
+const lift = new THREE.Vector3();
 
 // The file's position on its (tilted) orbit at a given accumulated angle. Driving
 // off an accumulated angle (rather than absolute time) lets us ease the orbit
@@ -84,6 +85,7 @@ function OrbitItem({
   open,
   paused,
   selected,
+  dimmed,
   onSelect,
 }: {
   work: Work;
@@ -93,6 +95,8 @@ function OrbitItem({
   open: boolean;
   paused: boolean;
   selected: boolean;
+  /** A video is open and this isn't it — fade back so the stage clears. */
+  dimmed: boolean;
   onSelect: WorksReveal3DProps['onSelect'];
 }) {
   const group = useRef<THREE.Group>(null);
@@ -101,6 +105,16 @@ function OrbitItem({
   const prevOpen = useRef(open);
   const angle = useRef(params.baseAngle); // accumulated orbit angle
   const speedFactor = useRef(1); // eases 1→0 when paused (video open), back on resume
+  const hover = useRef(0); // eases 0→1 while hovered (lift/scale/glow)
+  const [hovered, setHovered] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  // Once a video is opening/open the cloud is frozen — drop any active hover so the
+  // file doesn't stay lifted/glowing behind the player (its pointerLeave won't fire
+  // after pointer-events is removed).
+  useEffect(() => {
+    if (paused) setHovered(false);
+  }, [paused]);
 
   useFrame((state, dt) => {
     const g = group.current;
@@ -120,9 +134,15 @@ function OrbitItem({
     prog.current = THREE.MathUtils.damp(prog.current, target, 6, d);
     const p = prog.current;
 
-    // Ease the orbit speed to a clean stop while a video is open, and back up on
-    // exit, advancing the accumulated angle by the current (eased) speed.
-    speedFactor.current = THREE.MathUtils.damp(speedFactor.current, paused ? 0 : 1, 3.5, d);
+    // Ease the hover lift (also pauses this file's own orbit so it's a still,
+    // easy target while you aim at it).
+    hover.current = THREE.MathUtils.damp(hover.current, hovered ? 1 : 0, 10, d);
+    const h = hover.current;
+
+    // Ease the orbit speed to a clean stop while a video is open OR this file is
+    // hovered, and back up otherwise; advance the angle by the current speed.
+    const speedTarget = paused || hovered ? 0 : 1;
+    speedFactor.current = THREE.MathUtils.damp(speedFactor.current, speedTarget, 3.5, d);
     angle.current += params.speed * speedFactor.current * d;
 
     // Lerp between the folder and the file's live orbit point, so once settled it
@@ -133,9 +153,14 @@ function OrbitItem({
       from[1] + (tmp.y - from[1]) * p,
       from[2] + (tmp.z - from[2]) * p,
     );
+    // On hover, raise the file toward the camera so it reads as lifted off its orbit.
+    if (h > 0.0001) {
+      lift.copy(state.camera.position).sub(tmp).normalize().multiplyScalar(0.18 * h);
+      tmp.add(lift);
+    }
     g.position.copy(tmp);
     g.lookAt(state.camera.position);
-    g.scale.setScalar(0.0001 + p);
+    g.scale.setScalar((0.0001 + p) * (1 + 0.22 * h));
   });
 
   function handleClick(e: MouseEvent<HTMLDivElement>) {
@@ -149,11 +174,22 @@ function OrbitItem({
 
   return (
     <group ref={group} scale={0.0001}>
-      <Html transform scale={CLOUD.scale} zIndexRange={[40, 0]} occlude="blending">
+      <Html transform scale={CLOUD.scale / CLOUD.supersample} zIndexRange={[40, 0]}>
         <div
-          className={`cloud-item${selected ? ' is-selected' : ''}`}
-          style={{ backfaceVisibility: 'hidden', pointerEvents: 'auto' }}
+          ref={wrapRef}
+          className={`cloud-item${selected ? ' is-selected' : ''}${hovered ? ' is-hovered' : ''}`}
+          style={{
+            backfaceVisibility: 'hidden',
+            // Frozen (no hover/click) once a video is opening — this includes the
+            // selected file, which sits behind the player.
+            pointerEvents: paused || dimmed ? 'none' : 'auto',
+            opacity: dimmed ? 0.12 : 1,
+            transition: 'opacity 360ms ease',
+            ['--ss' as string]: CLOUD.supersample,
+          }}
           onClick={handleClick}
+          onPointerEnter={() => setHovered(true)}
+          onPointerLeave={() => setHovered(false)}
           role="button"
           tabIndex={0}
         >
@@ -168,7 +204,8 @@ function OrbitItem({
                 style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
               />
             ) : (
-              <MovIcon size={60} />
+              // Fill the glyph box so placeholders match the sized <img> icons.
+              <MovIcon size="100%" />
             )}
           </div>
           <span className="cloud-item-label">{work.title}</span>
@@ -203,6 +240,9 @@ export function WorksReveal3D({ works, selectedWorkId, open, paused, onSelect }:
           open={open}
           paused={paused}
           selected={selectedWorkId === work.id}
+          // When a video is open, fade every other file so the stage clears (the
+          // selected one stays — it sits behind the video window).
+          dimmed={paused && selectedWorkId !== undefined && selectedWorkId !== work.id}
           onSelect={onSelect}
         />
       ))}

@@ -112,6 +112,30 @@ export const GALLERY = {
   faceY: Math.PI,
 };
 
+// The text windows (contact.txt / readme.txt) sit FARTHER from the Buddha than
+// the video panel, so they don't crowd the model. We push them straight back
+// ALONG the gallery camera's view ray (camera → GALLERY_CENTER), so they stay
+// dead-centre on screen — only their distance from the model changes. Bump
+// TEXT_PANEL_PUSHBACK to move them further still; the video center is unaffected.
+export const TEXT_PANEL_PUSHBACK = 1.6;
+// Slide the text windows along the gallery camera's right vector so they sit a
+// little right of centre on screen (the camera views at an angle, so a plain
+// world-X shift would read as diagonal).
+export const TEXT_PANEL_SHIFT_RIGHT = 1.5;
+export const TEXT_PANEL_CENTER: [number, number, number] = (() => {
+  const cam = POSES.gallery.position;
+  const c = GALLERY_CENTER;
+  const dir = [c[0] - cam[0], c[1] - cam[1], c[2] - cam[2]];
+  const len = Math.hypot(dir[0], dir[1], dir[2]) || 1;
+  const k = TEXT_PANEL_PUSHBACK / len;
+  const base = [c[0] + dir[0] * k, c[1] + dir[1] * k, c[2] + dir[2] * k];
+  // Screen-right = normalize(forward × worldUp), forward = camera → center.
+  const right = [-dir[2], 0, dir[0]];
+  const rlen = Math.hypot(right[0], right[1], right[2]) || 1;
+  const s = TEXT_PANEL_SHIFT_RIGHT / rlen;
+  return [base[0] + right[0] * s, base[1] + right[1] * s, base[2] + right[2] * s];
+})();
+
 // ── 3D works cloud ──────────────────────────────────────────────────────────
 // The works are free-floating ".mov" files scattered in a loose cloud around the
 // gallery center (no Finder window). They fly out from the center on open and
@@ -123,6 +147,13 @@ export const CLOUD = {
   scale: 0.16,
   /** World amplitude of the very subtle particle drift while a file is hovered. */
   driftAmplitude: 0.035,
+  /** Supersampling factor for the file's DOM: it's laid out this many times
+   *  larger in CSS px and the Html scale is divided by the same factor, so the
+   *  on-screen size is unchanged but the backing texture has N× the resolution.
+   *  Keeps the always-on labels crisp even while the files move/billboard
+   *  (a moving <Html transform> samples its rasterized layer, so more texels =
+   *  sharper text). Bump for sharper, drop for less GPU memory. */
+  supersample: 2.5,
 };
 
 // ── Orbiting works ───────────────────────────────────────────────────────────

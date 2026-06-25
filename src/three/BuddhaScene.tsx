@@ -1,4 +1,4 @@
-import { Suspense } from 'react';
+import { ReactNode, Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Buddha } from './Buddha';
 import { CameraRig } from './CameraRig';
@@ -22,7 +22,7 @@ export type Panel3DSpec =
       paused: boolean;
       onSelect: (work: Work, origin: IconClickOrigin, world: [number, number, number]) => void;
     }
-  | { kind: 'text'; title: string; content: string; onClose: () => void };
+  | { kind: 'text'; title: string; content: ReactNode; onClose: () => void };
 
 interface BuddhaSceneProps {
   target: CameraTarget;

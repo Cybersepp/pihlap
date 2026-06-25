@@ -3,7 +3,7 @@
 // /public/assets/icons/ and switch the component to <img src=...>).
 
 interface IconProps {
-  size?: number;
+  size?: number | string;
 }
 
 export function FolderIcon({ size = 56 }: IconProps) {

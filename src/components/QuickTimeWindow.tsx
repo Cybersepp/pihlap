@@ -2,15 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import Player from '@vimeo/player';
 import { Work } from '../data/works';
-import { IconClickOrigin } from './DesktopIcon';
-import { makeTransformOrigin, springOpen } from '../lib/animation';
+import { springOpen } from '../lib/animation';
 import { getQuickTimeLayout } from '../lib/device';
 
 interface QuickTimeWindowProps {
   work: Work;
   onClose: () => void;
   isMobile: boolean;
-  origin: IconClickOrigin | null;
 }
 
 const MAX_VIDEO_WIDTH = 1080;
@@ -85,7 +83,7 @@ function formatTime(seconds: number): string {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-export function QuickTimeWindow({ work, onClose, isMobile, origin }: QuickTimeWindowProps) {
+export function QuickTimeWindow({ work, onClose, isMobile }: QuickTimeWindowProps) {
   const [isPlaying, setIsPlaying] = useState(true);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -301,14 +299,16 @@ export function QuickTimeWindow({ work, onClose, isMobile, origin }: QuickTimeWi
     ? `${formatTime(currentTime)} / ${formatTime(duration)}`
     : '00:08';
 
-  const { clamped, videoHeight, videoWidth, windowStyle } = getQuickTimeLayout(MAX_VIDEO_WIDTH);
+  const { videoHeight, videoWidth, windowStyle } = getQuickTimeLayout(MAX_VIDEO_WIDTH);
 
   return (
     <motion.div
       className="window qt-window"
       style={{
+        // Grow from screen-centre: the camera has just parked the clicked file
+        // there, so the video reads as that file expanding into the player.
         ...windowStyle,
-        transformOrigin: isMobile ? '50% 50%' : makeTransformOrigin(origin, clamped.width, clamped.height),
+        transformOrigin: '50% 50%',
         zIndex: 200,
       }}
       initial={{ scale: 0.85, opacity: 0 }}
@@ -337,7 +337,10 @@ export function QuickTimeWindow({ work, onClose, isMobile, origin }: QuickTimeWi
           {vimeoId ? (
             <iframe
               ref={iframeRef}
-              src={`https://player.vimeo.com/video/${vimeoId}?autoplay=1&loop=1&title=0&byline=0&portrait=0&controls=0&dnt=1`}
+              // On phones, let Vimeo render its own (native) controls — far less
+              // fiddly than our custom overlay on touch. Desktop keeps controls=0
+              // and uses the custom glass controls below.
+              src={`https://player.vimeo.com/video/${vimeoId}?autoplay=1&loop=1&title=0&byline=0&portrait=0&controls=${isMobile ? 1 : 0}&dnt=1`}
               allow="autoplay; fullscreen; picture-in-picture; clipboard-write"
               allowFullScreen
               title={work.title}
@@ -354,6 +357,7 @@ export function QuickTimeWindow({ work, onClose, isMobile, origin }: QuickTimeWi
                 loop
                 muted
                 playsInline
+                controls={isMobile}
               />
             )
           ) : (
@@ -375,8 +379,9 @@ export function QuickTimeWindow({ work, onClose, isMobile, origin }: QuickTimeWi
 
           {/* Pointer-activity overlay above the iframe so we can detect
               mouse-moves and taps over the video area (iframe cross-origin
-              events don't reach the parent). */}
-          {vimeoId && (
+              events don't reach the parent). Desktop only — on mobile Vimeo's
+              own controls handle interaction. */}
+          {!isMobile && vimeoId && (
             <div
               className="qt-pointer-overlay"
               onMouseMove={onPointerActivity}
@@ -385,7 +390,9 @@ export function QuickTimeWindow({ work, onClose, isMobile, origin }: QuickTimeWi
             />
           )}
 
-          {/* Floating glass controls overlay */}
+          {/* Floating glass controls overlay — desktop only; phones use the
+              player's native controls instead. */}
+          {!isMobile && (
           <div
             className="qt-controls"
             onMouseEnter={onControlsEnter}
@@ -448,6 +455,7 @@ export function QuickTimeWindow({ work, onClose, isMobile, origin }: QuickTimeWi
               </span>
             )}
           </div>
+          )}
         </div>
       </div>
     </motion.div>

@@ -1,3 +1,4 @@
+import { ReactNode } from 'react';
 import { Window3D } from './Window3D';
 
 // Fixed window size (CSS px) — scaled into the world by Window3D / GALLERY.scale.
@@ -6,7 +7,7 @@ const WIN_H = 380;
 
 export interface TextPanel3DProps {
   title: string;
-  content: string;
+  content: ReactNode;
   onClose: () => void;
 }
 
@@ -15,14 +16,23 @@ export interface TextPanel3DProps {
 // the Buddha and the window scales open in the middle.
 export function TextPanel3D({ title, content, onClose }: TextPanel3DProps) {
   return (
-    <Window3D>
+    <Window3D
+      // Blank "paper" shown when the camera is behind the panel — same footprint
+      // as the window so the 3D plane keeps its size through the flip.
+      back={
+        <div
+          className="text-3d-back"
+          aria-hidden="true"
+          style={{ width: WIN_W, height: WIN_H }}
+        />
+      }
+    >
       <div
         className="window text-window text-3d"
         style={{
           position: 'relative',
           width: WIN_W,
           height: WIN_H,
-          backfaceVisibility: 'hidden',
           pointerEvents: 'auto',
         }}
       >

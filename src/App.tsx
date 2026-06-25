@@ -15,8 +15,9 @@ import {
   type CameraTarget,
 } from './three/poses';
 import { works, Work } from './data/works';
-import { MaterialSettings, DEFAULT_MATERIAL_SETTINGS } from './three/materialSettings';
-import { contactText, readMeText } from './data/content';
+import { DEFAULT_MATERIAL_SETTINGS } from './three/materialSettings';
+import { readMeText } from './data/content';
+import { ContactCard } from './components/ContactCard';
 import { shouldUseMobileLayout } from './lib/device';
 
 // The 3D layer pulls in three.js + drei (~900KB). Code-split it so the desktop
@@ -24,12 +25,6 @@ import { shouldUseMobileLayout } from './lib/device';
 const BuddhaScene = lazy(() =>
   import('./three/BuddhaScene').then((m) => ({ default: m.BuddhaScene })),
 );
-
-// Dev-only live material lab. Gated on import.meta.env.DEV so the dynamic import
-// is dead-code-eliminated from production builds — it only runs under `npm run dev`.
-const DevMaterialControls = import.meta.env.DEV
-  ? lazy(() => import('./dev/MaterialControls').then((m) => ({ default: m.MaterialControls })))
-  : null;
 
 type WindowState =
   | { type: 'none' }
@@ -45,14 +40,11 @@ const focusKeyFor = (workId: string) => `focus:${workId}`;
 export default function App() {
   const [windowState, setWindowState] = useState<WindowState>({ type: 'none' });
   const [selectedIcon, setSelectedIcon] = useState<SelectedIcon>(null);
-  const [origin, setOrigin] = useState<IconClickOrigin | null>(null);
   // Works cloud lifecycle, separate from windowState so the files can fly back
   // *into* the folder on close: 'open' (spilled out), 'closing' (flying back —
   // still mounted), 'closed' (unmounted).
   const [worksPhase, setWorksPhase] = useState<'open' | 'closing' | 'closed'>('closed');
   const [isMobile, setIsMobile] = useState(false);
-  // Live model material, edited via the dev-only panel (defaults in production).
-  const [materialSettings, setMaterialSettings] = useState<MaterialSettings>(DEFAULT_MATERIAL_SETTINGS);
   // The camera target key the rig has actually finished settling into, or null
   // while a move is in progress. Used to delay revealing the video until the
   // camera reaches the focused tile — never trusting a stale destination.
@@ -74,7 +66,7 @@ export default function App() {
     };
   }, []);
 
-  function openWindow(icon: SelectedIcon, clickOrigin: IconClickOrigin) {
+  function openWindow(icon: SelectedIcon) {
     // Click on the currently-selected icon toggles it closed. The works cloud has
     // no window chrome / close button, so the folder icon is its toggle too.
     if (selectedIcon === icon) {
@@ -83,7 +75,6 @@ export default function App() {
       return;
     }
 
-    setOrigin(clickOrigin);
     setSelectedIcon(icon);
 
     switch (icon) {
@@ -95,10 +86,9 @@ export default function App() {
 
   function openWorkFromFinder(
     work: Work,
-    clickOrigin: IconClickOrigin,
+    _origin: IconClickOrigin,
     world: [number, number, number],
   ) {
-    setOrigin(clickOrigin);
     setFocusWorld(world);
     setWindowState({ type: 'quicktime', work });
   }
@@ -165,7 +155,7 @@ export default function App() {
       onSelect: openWorkFromFinder,
     };
   } else if (windowState.type === 'contact') {
-    panel = { kind: 'text', title: 'contact.txt', content: contactText, onClose: closeAll };
+    panel = { kind: 'text', title: 'contact.txt', content: <ContactCard />, onClose: closeAll };
   } else if (windowState.type === 'readme') {
     panel = { kind: 'text', title: 'readme.txt', content: readMeText, onClose: closeAll };
   }
@@ -206,14 +196,14 @@ export default function App() {
       label: 'selected works',
       glyph: <FolderIcon />,
       selected: selectedIcon === 'works',
-      onClick: (o) => openWindow('works', o),
+      onClick: () => openWindow('works'),
     },
     {
       id: 'contact',
       label: 'contact.txt',
       glyph: <TextDocIcon />,
       selected: selectedIcon === 'contact',
-      onClick: (o) => openWindow('contact', o),
+      onClick: () => openWindow('contact'),
     },
     {
       id: 'readme',
@@ -229,7 +219,7 @@ export default function App() {
         />
       ),
       selected: selectedIcon === 'readme',
-      onClick: (o) => openWindow('readme', o),
+      onClick: () => openWindow('readme'),
     },
   ];
 
@@ -248,11 +238,14 @@ export default function App() {
           icons={sceneIcons}
           panel={panel}
           onSettle={setSettledKey}
-          orbitEnabled={settledKey === 'gallery'}
+          orbitEnabled={cameraTarget.key === 'gallery'}
           broken={broken}
-          materialSettings={materialSettings}
+          materialSettings={DEFAULT_MATERIAL_SETTINGS}
         />
       </Suspense>
+
+      {/* Cinematic focus dimmer behind the open video (fades the scene periphery). */}
+      <div className={`focus-vignette${videoVisible ? ' is-visible' : ''}`} aria-hidden="true" />
 
       {/* The video player stays a DOM overlay; it opens once the camera reaches the file. */}
       <AnimatePresence>
@@ -262,17 +255,9 @@ export default function App() {
             work={windowState.work}
             onClose={closeQuicktime}
             isMobile={isMobile}
-            origin={origin}
           />
         )}
       </AnimatePresence>
-
-      {/* Dev-only live material lab (never mounts in production). */}
-      {DevMaterialControls && (
-        <Suspense fallback={null}>
-          <DevMaterialControls settings={materialSettings} onChange={setMaterialSettings} />
-        </Suspense>
-      )}
     </>
   );
 }
