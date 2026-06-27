@@ -54,7 +54,15 @@ export function Buddha({
     const base = buildModelMaterial(settings, box);
     scene.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
-      if (mesh.isMesh) mesh.material = base;
+      if (mesh.isMesh) {
+        // The source GLB ships without a NORMAL attribute. Without normals the
+        // matcap lookup coordinate is undefined (NaN), and different GPUs resolve
+        // that differently — desktop sampled the black rim, phones sampled the
+        // light center, so the figure's color/texture diverged by device. Compute
+        // smooth normals so the matcap is sampled identically everywhere.
+        if (!mesh.geometry.attributes.normal) mesh.geometry.computeVertexNormals();
+        mesh.material = base;
+      }
     });
     const prev = prevBase.current as THREE.MeshMatcapMaterial | null;
     if (prev && prev !== base) {

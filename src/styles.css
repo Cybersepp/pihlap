@@ -644,6 +644,24 @@ button { font: inherit; color: inherit; }
   white-space: normal;
 }
 
+.readme {
+  white-space: normal;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.readme-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+
+.readme-text {
+  margin: 0;
+}
+
 .contact-header {
   margin-bottom: 22px;
 }

@@ -157,7 +157,21 @@ export default function App() {
   } else if (windowState.type === 'contact') {
     panel = { kind: 'text', title: 'contact.txt', content: <ContactCard />, onClose: closeAll };
   } else if (windowState.type === 'readme') {
-    panel = { kind: 'text', title: 'readme.txt', content: readMeText, onClose: closeAll };
+    panel = {
+      kind: 'text',
+      title: 'readme.txt',
+      content: (
+        <div className="readme">
+          <img
+            className="readme-image"
+            src={`${import.meta.env.BASE_URL}hippo.jpg`}
+            alt="hippo"
+          />
+          <p className="readme-text">{readMeText}</p>
+        </div>
+      ),
+      onClose: closeAll,
+    };
   }
 
   // The camera destination derived from the current state. Everything except the

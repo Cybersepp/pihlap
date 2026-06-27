@@ -26,8 +26,11 @@ export const DEFAULT_MATERIAL_SETTINGS: MaterialSettings = {
   metalness: 0,
   gradientBottom: '#7c3f2a',
   gradientTop: '#e9c8a4',
-  matcapHi: '#f3dcc0',
-  matcapMid: '#cd8a5f',
+  // Black clay: near-black with a faint warm sheen toward the camera, falling off
+  // to pure black at the rim. At rest the figure reads as a dark sculpture; the
+  // additive glow shell is what lights it up on the 4th-wall break.
+  matcapHi: '#36302a',
+  matcapMid: '#15110d',
   matcapLo: '#000000',
 };
 
@@ -49,8 +52,8 @@ function makeMatcapTexture(hi: string, mid: string, lo: string): THREE.Texture {
   ctx.arc(s / 2, s / 2, s / 2, 0, Math.PI * 2);
   ctx.fill();
   const h = ctx.createRadialGradient(s * 0.34, s * 0.28, 0, s * 0.34, s * 0.28, s * 0.18);
-  h.addColorStop(0, 'rgba(255,248,235,0.85)');
-  h.addColorStop(1, 'rgba(255,248,235,0)');
+  h.addColorStop(0, 'rgba(235,225,210,0.18)');
+  h.addColorStop(1, 'rgba(235,225,210,0)');
   ctx.fillStyle = h;
   ctx.fillRect(0, 0, s, s);
   const tex = new THREE.CanvasTexture(c);
