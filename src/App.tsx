@@ -3,15 +3,16 @@ import { AnimatePresence } from 'framer-motion';
 import './styles.css';
 import { IconClickOrigin } from './components/DesktopIcon';
 import { QuickTimeWindow } from './components/QuickTimeWindow';
+import { WorkDetailOverlay } from './components/WorkDetailOverlay';
 import { FolderIcon, TextDocIcon } from './components/Icons';
 import type { SceneIcon } from './three/DesktopIcons3D';
-import type { Panel3DSpec } from './three/BuddhaScene';
+import type { Panel3DSpec } from './three/MartinScene';
 import {
   GALLERY,
   POSES,
   POSES_MOBILE,
   FOCUS_SMOOTH_TIME,
-  getFocusPoseFromWorld,
+  getDetailPoseFromWorld,
   type CameraTarget,
 } from './three/poses';
 import { works, Work } from './data/works';
@@ -22,13 +23,14 @@ import { shouldUseMobileLayout } from './lib/device';
 
 // The 3D layer pulls in three.js + drei (~900KB). Code-split it so the desktop
 // DOM paints instantly and the WebGL bundle streams in as its own chunk.
-const BuddhaScene = lazy(() =>
-  import('./three/BuddhaScene').then((m) => ({ default: m.BuddhaScene })),
+const MartinScene = lazy(() =>
+  import('./three/MartinScene').then((m) => ({ default: m.MartinScene })),
 );
 
 type WindowState =
   | { type: 'none' }
   | { type: 'finder' }
+  | { type: 'detail'; work: Work }
   | { type: 'quicktime'; work: Work }
   | { type: 'contact' }
   | { type: 'readme' };
@@ -89,11 +91,24 @@ export default function App() {
     _origin: IconClickOrigin,
     world: [number, number, number],
   ) {
+    // Clicking a tile opens its detail view (expanded tile + info panel); the
+    // actual video player opens only when the user hits play.
     setFocusWorld(world);
-    setWindowState({ type: 'quicktime', work });
+    setWindowState({ type: 'detail', work });
   }
 
+  // Detail → playing the video.
+  function playSelected() {
+    setWindowState((s) => (s.type === 'detail' ? { type: 'quicktime', work: s.work } : s));
+  }
+
+  // Player closes back to the detail view (not all the way out).
   function closeQuicktime() {
+    setWindowState((s) => (s.type === 'quicktime' ? { type: 'detail', work: s.work } : { type: 'finder' }));
+  }
+
+  // Detail closes back to the spiral.
+  function closeDetail() {
     setWindowState({ type: 'finder' });
   }
 
@@ -107,6 +122,8 @@ export default function App() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       if (windowState.type === 'quicktime') {
+        setWindowState((s) => (s.type === 'quicktime' ? { type: 'detail', work: s.work } : s));
+      } else if (windowState.type === 'detail') {
         setWindowState({ type: 'finder' });
       } else if (windowState.type !== 'none') {
         setSelectedIcon(null);
@@ -123,7 +140,7 @@ export default function App() {
   // drops it immediately.
   useEffect(() => {
     const t = windowState.type;
-    if (t === 'finder' || t === 'quicktime') setWorksPhase('open');
+    if (t === 'finder' || t === 'quicktime' || t === 'detail') setWorksPhase('open');
     else if (t === 'none') setWorksPhase((prev) => (prev === 'open' ? 'closing' : prev));
     else setWorksPhase('closed');
   }, [windowState.type]);
@@ -137,7 +154,12 @@ export default function App() {
     return () => window.clearTimeout(t);
   }, [worksPhase]);
 
-  const selectedWorkId = windowState.type === 'quicktime' ? windowState.work.id : undefined;
+  const selectedWorkId =
+    windowState.type === 'quicktime' || windowState.type === 'detail'
+      ? windowState.work.id
+      : undefined;
+  // A work is selected (detail or playing): freeze the spiral, expand + spotlight.
+  const workOpen = windowState.type === 'detail' || windowState.type === 'quicktime';
 
   // The 3D window panel mounted in the gallery center, derived from state. The
   // Finder (and the video opened from it) shows the works grid; contact/readme
@@ -151,7 +173,7 @@ export default function App() {
       works,
       selectedWorkId,
       open: worksPhase === 'open',
-      paused: windowState.type === 'quicktime',
+      paused: workOpen,
       onSelect: openWorkFromFinder,
     };
   } else if (windowState.type === 'contact') {
@@ -178,16 +200,18 @@ export default function App() {
   // focused video frames the gallery center; the video flies to the clicked file.
   const poseSet = isMobile ? POSES_MOBILE : POSES;
   let cameraTarget: CameraTarget;
-  if (windowState.type === 'quicktime') {
+  if (windowState.type === 'detail' || windowState.type === 'quicktime') {
+    // Detail and playback share one pose (tile reframed left), so hitting play
+    // doesn't move the camera — the player just fades in over the framed tile.
     cameraTarget = {
       key: focusKeyFor(windowState.work.id),
-      spec: getFocusPoseFromWorld(focusWorld),
+      spec: getDetailPoseFromWorld(focusWorld),
       smoothTime: FOCUS_SMOOTH_TIME,
     };
   } else if (windowState.type === 'none') {
     cameraTarget = { key: 'rest', spec: poseSet.rest };
   } else {
-    // finder / contact / readme all swing behind the Buddha to the gallery view.
+    // finder / contact / readme all swing behind Martin to the gallery view.
     cameraTarget = { key: 'gallery', spec: poseSet.gallery };
   }
 
@@ -244,19 +268,34 @@ export default function App() {
       {/* Dark studio backdrop, crossfaded in over the sky once the 4th wall breaks. */}
       <div className={`studio${broken ? ' is-visible' : ''}`} aria-hidden="true" />
 
-      {/* 3D Buddha + world-anchored icons + (while a window is open) its 3D panel. */}
+      {/* 3D Martin + world-anchored icons + (while a window is open) its 3D panel. */}
       <Suspense fallback={null}>
-        <BuddhaScene
+        <MartinScene
           target={cameraTarget}
           isMobile={isMobile}
           icons={sceneIcons}
           panel={panel}
           onSettle={setSettledKey}
-          orbitEnabled={cameraTarget.key === 'gallery'}
+          // The spiral gallery owns wheel/touch (scroll winds the helix), so the
+          // camera rig's drag/dolly stays disabled throughout.
+          orbitEnabled={false}
           broken={broken}
+          dimmed={workOpen}
           materialSettings={DEFAULT_MATERIAL_SETTINGS}
         />
       </Suspense>
+
+      {/* Detail view chrome: play button over the tile + right-hand info panel. */}
+      <AnimatePresence>
+        {windowState.type === 'detail' && (
+          <WorkDetailOverlay
+            key={`detail-${windowState.work.id}`}
+            work={windowState.work}
+            onPlay={playSelected}
+            onClose={closeDetail}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Cinematic focus dimmer behind the open video (fades the scene periphery). */}
       <div className={`focus-vignette${videoVisible ? ' is-visible' : ''}`} aria-hidden="true" />

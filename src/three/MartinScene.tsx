@@ -1,9 +1,9 @@
 import { ReactNode, Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { Buddha } from './Buddha';
+import { Martin } from './Martin';
 import { CameraRig } from './CameraRig';
 import { DesktopIcons3D, SceneIcon } from './DesktopIcons3D';
-import { WorksReveal3D } from './WorksReveal3D';
+import { WorksSpiral3D } from './WorksSpiral3D';
 import { TextPanel3D } from './TextPanel3D';
 import { CameraTarget, SCENE_FOV } from './poses';
 import { MaterialSettings } from './materialSettings';
@@ -24,7 +24,7 @@ export type Panel3DSpec =
     }
   | { kind: 'text'; title: string; content: ReactNode; onClose: () => void };
 
-interface BuddhaSceneProps {
+interface MartinSceneProps {
   target: CameraTarget;
   isMobile: boolean;
   icons: SceneIcon[];
@@ -35,16 +35,18 @@ interface BuddhaSceneProps {
   orbitEnabled?: boolean;
   /** True once the camera has broken away from rest — heats the figure into its glow. */
   broken?: boolean;
+  /** A work detail/video is open — sink the figure into the background. */
+  dimmed?: boolean;
   /** Live material settings from the dev panel (defaults applied in production). */
   materialSettings?: MaterialSettings;
 }
 
 // Full-screen transparent 3D layer that replaces the old corner portrait.
 // It sits behind the desktop DOM (see .scene-canvas in styles.css) and contains
-// the Buddha + lighting + the camera rig, plus the world-anchored desktop icons
+// the Martin figure + lighting + the camera rig, plus the world-anchored desktop icons
 // and (while a window is open) a 3D window panel floating in the gallery center.
 // Lighting is a simple three-point rig (no HDRI / network dependency).
-export function BuddhaScene({ target, isMobile, icons, panel, onSettle, orbitEnabled, broken, materialSettings }: BuddhaSceneProps) {
+export function MartinScene({ target, isMobile, icons, panel, onSettle, orbitEnabled, broken, dimmed, materialSettings }: MartinSceneProps) {
   return (
     <div className="scene-canvas">
       <Canvas
@@ -59,13 +61,13 @@ export function BuddhaScene({ target, isMobile, icons, panel, onSettle, orbitEna
         <directionalLight position={[-4, 2.5, -3.5]} intensity={0.7} />
 
         <Suspense fallback={null}>
-          <Buddha broken={!!broken} settings={materialSettings} />
+          <Martin broken={!!broken} dimmed={!!dimmed} settings={materialSettings} />
         </Suspense>
 
         <DesktopIcons3D icons={icons} />
 
         {panel?.kind === 'finder' && (
-          <WorksReveal3D
+          <WorksSpiral3D
             works={panel.works}
             selectedWorkId={panel.selectedWorkId}
             open={panel.open}

@@ -13,7 +13,7 @@ export interface TextPanel3DProps {
 
 // A TextEdit-style window (contact.txt / readme.txt) rendered as a 3D panel in the
 // gallery center, exactly like the Finder — so opening it swings the camera behind
-// the Buddha and the window scales open in the middle.
+// Martin and the window scales open in the middle.
 export function TextPanel3D({ title, content, onClose }: TextPanel3DProps) {
   return (
     <Window3D

@@ -10,15 +10,22 @@ const MODEL_URL = `${import.meta.env.BASE_URL}pihlap.glb`;
 // Warm tone the surface heats up to on the break.
 const GLOW_COLOR = '#ffd98a';
 
-// The figure. Its base material comes from `settings` (matcap clay by default, but
-// live-swappable via the dev panel). On the 4th-wall break (`broken`) an additive
-// warm shell fades in over it, heating it toward a sun glow, then cools on return.
-// Otherwise it's completely immobile, so at rest the scene reads as a flat 2D image.
-export function Buddha({
+// The figure — a 3D scan of Martin. Its base material comes from `settings`
+// (matcap clay by default, but live-swappable via the dev panel). On the 4th-wall
+// break (`broken`) an additive warm shell fades in over it, heating it toward a
+// sun glow, then cools on return. Otherwise it's completely immobile, so at rest
+// the scene reads as a flat 2D image.
+// How dark the figure sinks (matcap color multiplier) when a work is selected.
+const DIM_LEVEL = 0.4;
+
+export function Martin({
   broken = false,
+  dimmed = false,
   settings = DEFAULT_MATERIAL_SETTINGS,
 }: {
   broken?: boolean;
+  /** A work detail/video is open — sink the figure into the background. */
+  dimmed?: boolean;
   settings?: MaterialSettings;
 }) {
   const { scene } = useGLTF(MODEL_URL);
@@ -72,11 +79,18 @@ export function Buddha({
     prevBase.current = base;
   }, [scene, box, settings]);
 
-  // Eased 0→1 "heat" that follows the break, driving the glow shell.
+  // Eased 0→1 "heat" that follows the break, driving the glow shell; plus an eased
+  // dim that tints the base matcap darker when a work is open (matcap ignores
+  // scene lights, so we dim via the material color).
   const heat = useRef(0);
+  const dim = useRef(1);
   useFrame((_, dt) => {
-    heat.current = THREE.MathUtils.damp(heat.current, broken ? 1 : 0, 3, Math.min(dt, 0.05));
+    const d = Math.min(dt, 0.05);
+    heat.current = THREE.MathUtils.damp(heat.current, broken ? 1 : 0, 3, d);
     glowMaterial.opacity = heat.current;
+    dim.current = THREE.MathUtils.damp(dim.current, dimmed ? DIM_LEVEL : 1, 4, d);
+    const base = prevBase.current as THREE.MeshMatcapMaterial | null;
+    base?.color?.setScalar(dim.current);
   });
 
   return (

@@ -12,7 +12,7 @@ const _quat = new THREE.Quaternion();
 
 // A window panel rendered in 3D at the gallery center, facing the gallery camera.
 // Wraps arbitrary DOM (a Finder/text window) in an Html-transform panel with:
-//  - per-pixel occlusion by the Buddha (occlude="blending"),
+//  - per-pixel occlusion by Martin (occlude="blending"),
 //  - an OS-style "open" animation — the panel scales up from ~0 to full size,
 //    driven by damping the parent group's scale (Html reads its world matrix).
 //
