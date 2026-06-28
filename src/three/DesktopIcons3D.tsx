@@ -19,7 +19,7 @@ export interface SceneIcon {
 // frame against the rest pose, not the live camera), so they still parallax as
 // the camera swings. A resize recomputes them. `backfaceVisibility: hidden` makes
 // each icon vanish once the camera has swung past its plane.
-export function DesktopIcons3D({ icons }: { icons: SceneIcon[] }) {
+export function DesktopIcons3D({ icons, dimmed = false }: { icons: SceneIcon[]; dimmed?: boolean }) {
   const size = useThree((s) => s.size);
 
   // Column X + per-icon scale, framed against the rest pose (shared with the works
@@ -45,7 +45,11 @@ export function DesktopIcons3D({ icons }: { icons: SceneIcon[] }) {
             label={icon.label}
             selected={icon.selected}
             onClick={icon.onClick}
-            style={{ backfaceVisibility: 'hidden' }}
+            style={{
+              backfaceVisibility: 'hidden',
+              opacity: dimmed ? 0 : 1,
+              pointerEvents: dimmed ? 'none' : 'auto',
+            }}
           />
         </Html>
       ))}

@@ -21,16 +21,16 @@ export interface MaterialSettings {
 
 export const DEFAULT_MATERIAL_SETTINGS: MaterialSettings = {
   type: 'matcap',
-  color: '#b9764a',
+  color: '#ffffff',
   roughness: 0.9,
   metalness: 0,
-  gradientBottom: '#7c3f2a',
-  gradientTop: '#e9c8a4',
+  gradientBottom: '#ffffff',
+  gradientTop: '#ffffff',
   // Black clay: near-black with a faint warm sheen toward the camera, falling off
   // to pure black at the rim. At rest the figure reads as a dark sculpture; the
   // additive glow shell is what lights it up on the 4th-wall break.
-  matcapHi: '#36302a',
-  matcapMid: '#15110d',
+  matcapHi: '#ffffff',
+  matcapMid: '#ffffff',
   matcapLo: '#000000',
 };
 

@@ -162,11 +162,7 @@ button { font: inherit; color: inherit; }
   z-index: 90;
   pointer-events: none;
 }
-.detail-play {
-  position: absolute;
-  left: 32%;
-  top: 50%;
-  transform: translate(-50%, -50%);
+.tile-play {
   width: 84px;
   height: 84px;
   border-radius: 50%;
@@ -182,18 +178,18 @@ button { font: inherit; color: inherit; }
   pointer-events: auto;
   transition: transform 150ms ease, background 150ms ease;
 }
-.detail-play svg {
+.tile-play svg {
   margin-left: 4px; /* optically centre the triangle */
 }
-.detail-play:hover {
-  transform: translate(-50%, -50%) scale(1.08);
+.tile-play:hover {
+  transform: scale(1.08);
   background: rgba(18, 18, 20, 0.55);
 }
 .detail-panel {
   position: absolute;
   right: 5vw;
-  top: 50%;
-  transform: translateY(-50%);
+  top: 12vh;
+  transform: none;
   width: min(34vw, 420px);
   pointer-events: auto;
   color: #fdfaf4;
@@ -267,10 +263,6 @@ button { font: inherit; color: inherit; }
   border-color: #fff;
 }
 @media (max-width: 768px) {
-  .detail-play {
-    left: 50%;
-    top: 36%;
-  }
   .detail-panel {
     right: 5vw;
     left: 5vw;

@@ -19,6 +19,7 @@ import { works, Work } from './data/works';
 import { DEFAULT_MATERIAL_SETTINGS } from './three/materialSettings';
 import { readMeText } from './data/content';
 import { ContactCard } from './components/ContactCard';
+import { RibbonControls } from './components/RibbonControls';
 import { shouldUseMobileLayout } from './lib/device';
 
 // The 3D layer pulls in three.js + drei (~900KB). Code-split it so the desktop
@@ -174,7 +175,9 @@ export default function App() {
       selectedWorkId,
       open: worksPhase === 'open',
       paused: workOpen,
+      showPlay: windowState.type === 'detail',
       onSelect: openWorkFromFinder,
+      onPlay: playSelected,
     };
   } else if (windowState.type === 'contact') {
     panel = { kind: 'text', title: 'contact.txt', content: <ContactCard />, onClose: closeAll };
@@ -279,7 +282,6 @@ export default function App() {
           // The spiral gallery owns wheel/touch (scroll winds the helix), so the
           // camera rig's drag/dolly stays disabled throughout.
           orbitEnabled={false}
-          broken={broken}
           dimmed={workOpen}
           materialSettings={DEFAULT_MATERIAL_SETTINGS}
         />
@@ -296,6 +298,9 @@ export default function App() {
           />
         )}
       </AnimatePresence>
+
+      {/* Dev-only live tuning panel for the works ribbon (shown while it's open). */}
+      {import.meta.env.DEV && worksPhase !== 'closed' && <RibbonControls />}
 
       {/* Cinematic focus dimmer behind the open video (fades the scene periphery). */}
       <div className={`focus-vignette${videoVisible ? ' is-visible' : ''}`} aria-hidden="true" />

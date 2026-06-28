@@ -7,23 +7,16 @@ import { MaterialSettings, DEFAULT_MATERIAL_SETTINGS, buildModelMaterial } from 
 
 const MODEL_URL = `${import.meta.env.BASE_URL}pihlap.glb`;
 
-// Warm tone the surface heats up to on the break.
-const GLOW_COLOR = '#ffd98a';
-
 // The figure — a 3D scan of Martin. Its base material comes from `settings`
-// (matcap clay by default, but live-swappable via the dev panel). On the 4th-wall
-// break (`broken`) an additive warm shell fades in over it, heating it toward a
-// sun glow, then cools on return. Otherwise it's completely immobile, so at rest
-// the scene reads as a flat 2D image.
+// (matcap clay by default, but live-swappable via the dev panel). Otherwise it's
+// completely immobile, so at rest the scene reads as a flat 2D image.
 // How dark the figure sinks (matcap color multiplier) when a work is selected.
 const DIM_LEVEL = 0.4;
 
 export function Martin({
-  broken = false,
   dimmed = false,
   settings = DEFAULT_MATERIAL_SETTINGS,
 }: {
-  broken?: boolean;
   /** A work detail/video is open — sink the figure into the background. */
   dimmed?: boolean;
   settings?: MaterialSettings;
@@ -31,27 +24,12 @@ export function Martin({
   const { scene } = useGLTF(MODEL_URL);
 
   // Scene-derived bits that don't depend on the material settings.
-  const { scale, box, glow, glowMaterial } = useMemo(() => {
+  const { scale, box } = useMemo(() => {
     const b = new THREE.Box3().setFromObject(scene);
     const size = b.getSize(new THREE.Vector3());
     const maxDim = Math.max(size.x, size.y, size.z) || 1;
 
-    // A concentric copy rendered with an additive warm material — fading it in
-    // brightens the surface toward a glowing sun-warm tone without a hard swap.
-    const glowClone = scene.clone(true);
-    const mat = new THREE.MeshBasicMaterial({
-      color: new THREE.Color(GLOW_COLOR),
-      transparent: true,
-      opacity: 0,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    });
-    glowClone.traverse((obj) => {
-      const mesh = obj as THREE.Mesh;
-      if (mesh.isMesh) mesh.material = mat;
-    });
-
-    return { scale: TARGET_SIZE / maxDim, box: b, glow: glowClone, glowMaterial: mat };
+    return { scale: TARGET_SIZE / maxDim, box: b };
   }, [scene]);
 
   // Base material is rebuilt and reassigned live whenever the dev settings change.
@@ -79,15 +57,11 @@ export function Martin({
     prevBase.current = base;
   }, [scene, box, settings]);
 
-  // Eased 0→1 "heat" that follows the break, driving the glow shell; plus an eased
-  // dim that tints the base matcap darker when a work is open (matcap ignores
-  // scene lights, so we dim via the material color).
-  const heat = useRef(0);
+  // Eased dim that tints the base matcap darker when a work is open (matcap
+  // ignores scene lights, so we dim via the material color).
   const dim = useRef(1);
   useFrame((_, dt) => {
     const d = Math.min(dt, 0.05);
-    heat.current = THREE.MathUtils.damp(heat.current, broken ? 1 : 0, 3, d);
-    glowMaterial.opacity = heat.current;
     dim.current = THREE.MathUtils.damp(dim.current, dimmed ? DIM_LEVEL : 1, 4, d);
     const base = prevBase.current as THREE.MeshMatcapMaterial | null;
     base?.color?.setScalar(dim.current);
@@ -98,10 +72,6 @@ export function Martin({
       <group rotation={MODEL_ROTATION}>
         <Center scale={scale}>
           <primitive object={scene} />
-          {/* Slightly enlarged additive shell so the glow bleeds past the silhouette. */}
-          <group scale={1.02}>
-            <primitive object={glow} />
-          </group>
         </Center>
       </group>
     </group>

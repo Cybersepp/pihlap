@@ -10,6 +10,9 @@ import {
   FOCUS_TILE_YAW,
   nearestCongruentSlot,
   spiralPosition,
+  ribbonFrame,
+  ribbonFacing,
+  ribbonUp,
   ICON_ROWS_Y,
   iconColumnLayout,
 } from './poses';
@@ -22,7 +25,10 @@ export interface WorksSpiral3DProps {
   open: boolean;
   /** true while a video is open — input is ignored and tiles drop out of focus. */
   paused: boolean;
+  /** true in the detail state — the focused tile shows a 3D play button. */
+  showPlay: boolean;
   onSelect: (work: Work, origin: IconClickOrigin, world: [number, number, number]) => void;
+  onPlay: () => void;
 }
 
 // Tunable input feel.
@@ -48,15 +54,145 @@ const POP_RANGE = 1; // slots from center over which the pop falls off to nothin
 // World up — axis the opening tile yaws about so the turn stays vertical.
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
 
-// PLACEHOLDER: one real loop reused for every tile until per-work loops exist.
-// A single shared <video>/VideoTexture drives all 12 tiles (the shader desaturates
-// the off-centre ones), so it's one decode regardless of tile count.
-const LOOP_URL = `${import.meta.env.BASE_URL}loops/kai-angel-prada-party.mp4`;
+// Each work has its own 3s loop (loops/<id>.mp4) and a frozen poster frame
+// (loops/<id>.jpg). Every tile samples its own poster at rest; only the centered,
+// settled tile swaps the single shared <video> to its loop and plays it live — so
+// it's still one video decode regardless of tile count. Works without a real loop
+// fall back to the Kai Angel placeholder (their poster is already the Kai frame).
+const PLACEHOLDER_LOOP = `${import.meta.env.BASE_URL}loops/kai-angel-prada-party.mp4`;
+const posterUrl = (work: Work) => `${import.meta.env.BASE_URL}loops/${work.id}.jpg`;
 
 function smoothstep(e0: number, e1: number, x: number): number {
   const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0)));
   return t * t * (3 - 2 * t);
 }
+
+// ── Conforming tiles ─────────────────────────────────────────────────────────
+// Each video is warped onto the ribbon SURFACE rather than drawn as a rigid plane,
+// so neighbouring tiles' edges line up along the band (with a gap). Per frame, the
+// tile's vertices are sampled from the surface around its phase and expressed in
+// the tile's own local frame, so the group transform (spill / pop / open / scale)
+// still animates it. This distorts the footage where the ribbon curves — accepted.
+const CONFORM_W = 16; // width subdivisions (along the ribbon path)
+const BEZEL_QUADS = 3 * CONFORM_W + 2; // back + top wall + bottom wall + 2 sides
+const BEZEL_VERTS = BEZEL_QUADS * 6; // 2 triangles per quad
+
+// Scratch reused across all tiles (conform runs synchronously, one tile at a time).
+const _hu = new THREE.Vector3();
+const _world = new THREE.Vector3();
+const _pc = new THREE.Vector3();
+const _qcInv = new THREE.Quaternion();
+const _topF: THREE.Vector3[] = [];
+const _botF: THREE.Vector3[] = [];
+const _topB: THREE.Vector3[] = [];
+const _botB: THREE.Vector3[] = [];
+for (let k = 0; k <= CONFORM_W; k++) {
+  _topF.push(new THREE.Vector3());
+  _botF.push(new THREE.Vector3());
+  _topB.push(new THREE.Vector3());
+  _botB.push(new THREE.Vector3());
+}
+
+interface ConformGeoms {
+  frontGeo: THREE.PlaneGeometry;
+  bezelGeo: THREE.BufferGeometry;
+  sx: Float32Array;
+  sy: Float32Array;
+  bezelArr: Float32Array;
+  bezelPos: THREE.BufferAttribute;
+}
+
+// Build the per-tile front (video) + bezel (thickness shell) geometries and capture
+// each front vertex's canonical (sx, sy) in [-0.5, 0.5] so conformTile can re-place
+// them every frame.
+function makeConformGeoms(): ConformGeoms {
+  const frontGeo = new THREE.PlaneGeometry(1, 1, CONFORM_W, 1);
+  const fp = frontGeo.attributes.position as THREE.BufferAttribute;
+  fp.setUsage(THREE.DynamicDrawUsage);
+  const sx = new Float32Array(fp.count);
+  const sy = new Float32Array(fp.count);
+  for (let idx = 0; idx < fp.count; idx++) {
+    sx[idx] = fp.getX(idx);
+    sy[idx] = fp.getY(idx);
+  }
+  const bezelGeo = new THREE.BufferGeometry();
+  const bezelArr = new Float32Array(BEZEL_VERTS * 3);
+  const bezelPos = new THREE.BufferAttribute(bezelArr, 3);
+  bezelPos.setUsage(THREE.DynamicDrawUsage);
+  bezelGeo.setAttribute('position', bezelPos);
+  return { frontGeo, bezelGeo, sx, sy, bezelArr, bezelPos };
+}
+
+// Re-place a tile's front + bezel vertices onto the ribbon surface for the given
+// phase. `sp` is the tile's spine point and `qc` its (pure, un-yawed) frame — the
+// same pair the group transform uses — so the baked local geometry lands correctly.
+function conformTile(
+  phase: number,
+  sp: [number, number, number],
+  qc: THREE.Quaternion,
+  geoms: ConformGeoms,
+) {
+  const span = SPIRAL.fill; // phase-width of one tile (leaves a gap < 1 step)
+  const tileH = SPIRAL.tile[1];
+  const t = SPIRAL.thickness;
+  _qcInv.copy(qc).invert();
+  _pc.set(sp[0], sp[1], sp[2]);
+  // Place a canonical (sx, sy) onto the ribbon surface, in the tile's local frame.
+  // The width runs along -path (`phase - vx`): the frame maps world +X to local
+  // -X, so sampling this way keeps the front face toward the camera (visible +
+  // clickable) and the footage un-mirrored.
+  const place = (vx: number, vy: number, out: THREE.Vector3) => {
+    const u = phase - vx * span;
+    const su = spiralPosition(u);
+    ribbonUp(u, _hu);
+    out.set(su[0] + vy * tileH * _hu.x, su[1] + vy * tileH * _hu.y, su[2] + vy * tileH * _hu.z);
+    return out.sub(_pc).applyQuaternion(_qcInv);
+  };
+  // Front video face.
+  const fpos = geoms.frontGeo.attributes.position;
+  for (let idx = 0; idx < fpos.count; idx++) {
+    place(geoms.sx[idx], geoms.sy[idx], _world);
+    fpos.setXYZ(idx, _world.x, _world.y, _world.z);
+  }
+  fpos.needsUpdate = true;
+  geoms.frontGeo.computeBoundingSphere();
+  // Bezel shell: sample the perimeter, push it back by the thickness along local
+  // -Z, then stitch the back face + four walls (double-sided, so winding is free).
+  const W = CONFORM_W;
+  for (let k = 0; k <= W; k++) {
+    const vx = k / W - 0.5;
+    place(vx, 0.5, _topF[k]);
+    place(vx, -0.5, _botF[k]);
+    _topB[k].copy(_topF[k]);
+    _topB[k].z -= t;
+    _botB[k].copy(_botF[k]);
+    _botB[k].z -= t;
+  }
+  const arr = geoms.bezelArr;
+  let o = 0;
+  const push = (v: THREE.Vector3) => {
+    arr[o++] = v.x;
+    arr[o++] = v.y;
+    arr[o++] = v.z;
+  };
+  const quad = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, e: THREE.Vector3) => {
+    push(a); push(b); push(c);
+    push(a); push(c); push(e);
+  };
+  for (let k = 0; k < W; k++) {
+    quad(_topB[k], _topB[k + 1], _botB[k + 1], _botB[k]); // back face
+    quad(_topF[k], _topB[k], _topB[k + 1], _topF[k + 1]); // top wall
+    quad(_botF[k], _botF[k + 1], _botB[k + 1], _botB[k]); // bottom wall
+  }
+  quad(_topF[0], _botF[0], _botB[0], _topB[0]); // left wall
+  quad(_topF[W], _topB[W], _botB[W], _botF[W]); // right wall
+  geoms.bezelPos.needsUpdate = true;
+  geoms.bezelGeo.computeBoundingSphere();
+}
+
+// Fallback bezel colour for the material's initial value; the live grey level is
+// driven per-frame from SPIRAL.bezel (dimmed by the spotlight).
+const BEZEL_COLOR = 0x3a3a3a;
 
 // One tile on the helix. Starts tiny at the folder icon and, after its stagger,
 // eases out to its spiral slot (reusing the WorksReveal3D spill). Billboards to the
@@ -72,8 +208,11 @@ function SpiralItem({
   focused,
   delay,
   reveal,
+  showPlay,
+  onPlay,
   videoTexture,
   posterTexture,
+  liveWorkId,
   sRef,
   tilesRef,
 }: {
@@ -84,14 +223,20 @@ function SpiralItem({
   open: boolean;
   paused: boolean;
   focused: boolean;
+  /** Detail state — render the play button on this tile. */
+  showPlay: boolean;
+  onPlay: () => void;
   /** Spill stagger (seconds), assigned top→bottom by the parent. */
   delay: number;
   /** The spill has settled — tiles may now reveal into color at center. */
   reveal: boolean;
-  /** Shared live loop — only the lit/centered tile samples this. */
+  /** Shared live loop — only the centered, settled tile samples this. */
   videoTexture: THREE.Texture;
-  /** Frozen frame grabbed from the loop — every other tile samples this. */
+  /** This work's own frozen poster frame — what the tile shows at rest. */
   posterTexture: THREE.Texture;
+  /** The work whose loop is currently loaded & playing in the shared video,
+   *  or undefined while none is ready. A tile only goes live when it matches. */
+  liveWorkId: string | undefined;
   sRef: React.MutableRefObject<number>;
   /** Shared registry so the parent can raycast a click to this tile. */
   tilesRef: React.MutableRefObject<(THREE.Mesh | null)[]>;
@@ -101,6 +246,32 @@ function SpiralItem({
   // only dispose the material here.
   const material = useMemo(() => makeTileMaterial(posterTexture), [videoTexture]);
   useEffect(() => () => material.dispose(), [material]);
+  // Per-tile bezel material (geometry is shared) so its opacity/brightness can
+  // follow this tile's own fade + spotlight. Double-sided so it shows from any
+  // angle as the tile turns; depthWrite off to match the transparent video plane.
+  const bezelMaterial = useMemo(
+    () =>
+      new THREE.MeshBasicMaterial({
+        color: BEZEL_COLOR,
+        side: THREE.DoubleSide,
+        transparent: true,
+        depthWrite: false,
+      }),
+    [],
+  );
+  useEffect(() => () => bezelMaterial.dispose(), [bezelMaterial]);
+  // Per-tile conforming geometries (front video + bezel shell), re-placed onto the
+  // ribbon surface each frame so this tile's edges line up with its neighbours.
+  const geoms = useMemo(() => makeConformGeoms(), []);
+  useEffect(
+    () => () => {
+      geoms.frontGeo.dispose();
+      geoms.bezelGeo.dispose();
+    },
+    [geoms],
+  );
+  // The tile's pure (un-yawed) ribbon frame, reused for conforming the geometry.
+  const qc = useRef(new THREE.Quaternion());
 
   const prog = useRef(0); // 0 = in the folder, 1 = out on the slot
   const clock = useRef(0); // time since the current open/close flip (for stagger)
@@ -154,7 +325,16 @@ function SpiralItem({
       pz += dz * f;
     }
     g.position.set(px, py, pz);
-    g.lookAt(state.camera.position);
+    // Orient to the ribbon (faces outward, banked along the climb) instead of
+    // billboarding. At the crest the outward normal points at the gallery camera,
+    // so the focused tile still reads square-on. Keep the pure frame in `qc` for
+    // conforming, then copy it onto the group before the open-yaw is layered on.
+    ribbonFrame(phase, qc.current);
+    g.quaternion.copy(qc.current);
+    // Warp the tile's geometry onto the ribbon surface around its phase so its
+    // edges line up with its neighbours (baked relative to the same spine+frame
+    // the group transform uses, so spill/pop/open still animate it).
+    conformTile(phase, sp, qc.current, geoms);
     // Yaw a touch to the right as it opens; the focus camera follows this same
     // turn (FOCUS_YAW_FOLLOW in poses.ts) so the reframe respects it.
     if (grow > 0.0001) g.rotateOnWorldAxis(WORLD_UP, FOCUS_TILE_YAW * grow);
@@ -178,23 +358,56 @@ function SpiralItem({
     const dimTarget = paused && !opening ? BG_DIM : 1;
     material.uniforms.uDim.value = THREE.MathUtils.damp(material.uniforms.uDim.value, dimTarget, 5, d);
 
-    // Only the lit/centered tile plays the live loop; every other tile shows the
-    // frozen poster frame.
-    material.uniforms.uTex.value = focused && reveal ? videoTexture : posterTexture;
+    // The bezel shell follows the tile's fade and spotlight dimming, PLUS an extra
+    // fade as the tile turns away from the camera. The video face is single-sided
+    // (it culls when it turns away), but the bezel is double-sided — so without
+    // this the solid edges of the side/back tiles would stay fully visible. Fading
+    // by `ribbonFacing` makes the bezel disappear toward the edges with the video.
+    const bezelFade = smoothstep(0, 0.4, ribbonFacing(phase));
+    bezelMaterial.opacity = material.uniforms.uOpacity.value * bezelFade;
+    bezelMaterial.color.setScalar(SPIRAL.bezel * material.uniforms.uDim.value);
+
+    // A tile goes live only when it's the centered, settled work AND the shared
+    // video has actually loaded that work's loop (liveWorkId). Until then — and on
+    // every other tile — it shows its own frozen poster frame.
+    const isLive = focused && reveal && work.id === liveWorkId;
+    material.uniforms.uTex.value = isLive ? videoTexture : posterTexture;
   });
 
   return (
     <group ref={group} scale={0.0001}>
+      {/* Bezel shell behind the video plane so it reads as the tile's solid edge.
+          renderOrder pins the draw order (both are transparent + depthWrite off,
+          so distance-sorting alone could otherwise flip the bezel over the video). */}
+      <mesh geometry={geoms.bezelGeo} material={bezelMaterial} renderOrder={0} />
       <mesh
+        geometry={geoms.frontGeo}
         material={material}
+        renderOrder={1}
         ref={(m) => {
           tilesRef.current[i] = m;
           if (m) m.userData.workIndex = i;
         }}
-      >
-        <planeGeometry args={[SPIRAL.tile[0], SPIRAL.tile[1]]} />
-      </mesh>
+      />
+      {focused && showPlay && (
+        // Play affordance pinned to the tile surface — as an Html transform it
+        // inherits the group's ribbon orientation/curve, so it tilts with the tile
+        // in 3D rather than floating as a flat screen-space overlay.
+        <Html transform position={[0, 0, 0.06]} scale={0.2} zIndexRange={[70, 0]}>
+          <button
+            className="tile-play"
+            onClick={onPlay}
+            aria-label={`Play ${work.title}`}
+          >
+            <svg viewBox="0 0 24 24" width="34" height="34" fill="currentColor" aria-hidden="true">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          </button>
+        </Html>
+      )}
       {focused && reveal && (
+        // The focused tile sits at phase ~0 where the ribbon twist is zero, so the
+        // title needs no counter-roll — it's already level.
         <Html
           transform
           position={[0, -SPIRAL.tile[1] * 0.26, 0.06]}
@@ -213,7 +426,7 @@ function SpiralItem({
 // The works gallery as an endless upward helix around Martin. Scroll/drag winds it
 // and snaps the nearest work to front-and-center, where it reveals into color with
 // a scrambling title. Clicking the centered tile opens the existing video player.
-export function WorksSpiral3D({ works, open, paused, onSelect }: WorksSpiral3DProps) {
+export function WorksSpiral3D({ works, open, paused, showPlay, onSelect, onPlay }: WorksSpiral3DProps) {
   const size = useThree((s) => s.size);
   const camera = useThree((s) => s.camera);
   const raycaster = useThree((s) => s.raycaster);
@@ -228,10 +441,11 @@ export function WorksSpiral3D({ works, open, paused, onSelect }: WorksSpiral3DPr
     [aspect],
   );
 
-  // One shared looping <video> + VideoTexture for the whole wall (see LOOP_URL).
+
+  // One shared looping <video> + VideoTexture. Its src is swapped to the centered,
+  // settled work's loop (see the focus effect below); only that one tile samples it.
   const video = useMemo(() => {
     const v = document.createElement('video');
-    v.src = LOOP_URL;
     v.loop = true;
     v.muted = true;
     v.playsInline = true;
@@ -243,10 +457,8 @@ export function WorksSpiral3D({ works, open, paused, onSelect }: WorksSpiral3DPr
     t.colorSpace = THREE.SRGBColorSpace;
     return t;
   }, [video]);
-  // Play only while the gallery is open; clean up on unmount.
   useEffect(() => {
-    if (open) video.play().catch(() => {});
-    else video.pause();
+    if (!open) video.pause();
   }, [open, video]);
   useEffect(
     () => () => {
@@ -258,35 +470,42 @@ export function WorksSpiral3D({ works, open, paused, onSelect }: WorksSpiral3DPr
     [video, texture],
   );
 
-  // Grab one decoded frame from the loop as a static poster for the non-lit tiles.
-  // No separate thumbnail asset needed — it's frozen straight from the clip.
-  const posterRef = useRef<THREE.Texture | null>(null);
-  const [poster, setPoster] = useState<THREE.Texture | null>(null);
+  // Per-work static poster frames (loops/<id>.jpg). Every resting tile samples its
+  // own frame — no video decode until a tile becomes the centered, live one. A 1×1
+  // placeholder keeps the material's texture non-null until each poster arrives.
+  const fallbackTex = useMemo(() => {
+    const t = new THREE.DataTexture(new Uint8Array([20, 20, 20, 255]), 1, 1);
+    t.needsUpdate = true;
+    return t;
+  }, []);
+  const [posters, setPosters] = useState<(THREE.Texture | null)[]>(() =>
+    works.map(() => null),
+  );
   useEffect(() => {
-    const capture = () => {
-      const w = video.videoWidth || 512;
-      const h = video.videoHeight || 320;
-      const c = document.createElement('canvas');
-      c.width = w;
-      c.height = h;
-      const ctx = c.getContext('2d');
-      if (!ctx) return;
-      try {
-        ctx.drawImage(video, 0, 0, w, h);
-      } catch {
-        return;
-      }
-      const t = new THREE.CanvasTexture(c);
-      t.colorSpace = THREE.SRGBColorSpace;
-      posterRef.current?.dispose();
-      posterRef.current = t;
-      setPoster(t);
+    const loader = new THREE.TextureLoader();
+    const loaded: THREE.Texture[] = [];
+    let cancelled = false;
+    works.forEach((work, i) => {
+      loader.load(posterUrl(work), (t) => {
+        if (cancelled) {
+          t.dispose();
+          return;
+        }
+        t.colorSpace = THREE.SRGBColorSpace;
+        loaded[i] = t;
+        setPosters((prev) => {
+          const next = [...prev];
+          next[i] = t;
+          return next;
+        });
+      });
+    });
+    return () => {
+      cancelled = true;
+      loaded.forEach((t) => t?.dispose());
     };
-    video.addEventListener('loadeddata', capture);
-    if (video.readyState >= 2) capture();
-    return () => video.removeEventListener('loadeddata', capture);
-  }, [video]);
-  useEffect(() => () => posterRef.current?.dispose(), []);
+  }, [works]);
+  useEffect(() => () => fallbackTex.dispose(), [fallbackTex]);
 
   const n = works.length;
   const sRef = useRef(0); // current scroll
@@ -294,6 +513,10 @@ export function WorksSpiral3D({ works, open, paused, onSelect }: WorksSpiral3DPr
   const lastInput = useRef(-Infinity);
   const focusRef = useRef(0);
   const [focusedIndex, setFocusedIndex] = useState(0);
+  // The work whose loop is loaded & playing in the shared video, exposed to tiles
+  // only once it's actually ready so a tile never flashes the wrong (or unloaded)
+  // clip. Reset whenever focus moves; re-armed by the swap effect below.
+  const [liveWorkId, setLiveWorkId] = useState<string | undefined>(undefined);
   // Tile meshes registered by index, for raycasting a click to the centered tile.
   const tilesRef = useRef<(THREE.Mesh | null)[]>([]);
   // onSelect is recreated each App render; keep it in a ref so the input effect
@@ -324,6 +547,38 @@ export function WorksSpiral3D({ works, open, paused, onSelect }: WorksSpiral3DPr
     const t = window.setTimeout(() => setReveal(true), settleMs);
     return () => window.clearTimeout(t);
   }, [open, works, n]);
+
+  // Swap the shared <video> to the centered work's loop and play it — but only
+  // after focus holds briefly, so winding the helix doesn't thrash the src. The
+  // debounce resets on every focus change; the tile stays on its poster until the
+  // clip is `playing`, then liveWorkId arms it. Sourceless works (404) fall back to
+  // the Kai Angel placeholder. Disabled while a video is open (paused).
+  useEffect(() => {
+    if (!open || paused) return;
+    const work = works[focusedIndex];
+    if (!work) return;
+    setLiveWorkId(undefined);
+    const handle = window.setTimeout(() => {
+      const onPlaying = () => setLiveWorkId(work.id);
+      const onError = () => {
+        if (!video.src.endsWith('kai-angel-prada-party.mp4')) {
+          video.src = PLACEHOLDER_LOOP;
+          video.load();
+          video.play().catch(() => {});
+        }
+      };
+      video.onplaying = onPlaying;
+      video.onerror = onError;
+      video.src = work.loopUrl;
+      video.load();
+      video.play().catch(() => {});
+    }, 200);
+    return () => {
+      window.clearTimeout(handle);
+      video.onplaying = null;
+      video.onerror = null;
+    };
+  }, [focusedIndex, open, paused, works, video]);
 
   // Input → sTarget. Active only while the gallery is open and no video is up
   // (the camera rig's wheel/touch are disabled in this state, so we own them).
@@ -451,8 +706,11 @@ export function WorksSpiral3D({ works, open, paused, onSelect }: WorksSpiral3DPr
           focused={i === focusedIndex}
           delay={delays[i] ?? i * STAGGER}
           reveal={reveal}
+          showPlay={showPlay}
+          onPlay={onPlay}
           videoTexture={texture}
-          posterTexture={poster ?? texture}
+          posterTexture={posters[i] ?? fallbackTex}
+          liveWorkId={liveWorkId}
           sRef={sRef}
           tilesRef={tilesRef}
         />

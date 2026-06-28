@@ -20,7 +20,10 @@ export type Panel3DSpec =
       open: boolean;
       /** true while a video is open — the orbits halt cleanly, then resume. */
       paused: boolean;
+      /** true in the detail state — the focused tile shows a 3D play button. */
+      showPlay: boolean;
       onSelect: (work: Work, origin: IconClickOrigin, world: [number, number, number]) => void;
+      onPlay: () => void;
     }
   | { kind: 'text'; title: string; content: ReactNode; onClose: () => void };
 
@@ -33,8 +36,6 @@ interface MartinSceneProps {
   onSettle?: (key: string | null) => void;
   /** User may orbit around the gallery panel (after the swing settles). */
   orbitEnabled?: boolean;
-  /** True once the camera has broken away from rest — heats the figure into its glow. */
-  broken?: boolean;
   /** A work detail/video is open — sink the figure into the background. */
   dimmed?: boolean;
   /** Live material settings from the dev panel (defaults applied in production). */
@@ -46,7 +47,7 @@ interface MartinSceneProps {
 // the Martin figure + lighting + the camera rig, plus the world-anchored desktop icons
 // and (while a window is open) a 3D window panel floating in the gallery center.
 // Lighting is a simple three-point rig (no HDRI / network dependency).
-export function MartinScene({ target, isMobile, icons, panel, onSettle, orbitEnabled, broken, dimmed, materialSettings }: MartinSceneProps) {
+export function MartinScene({ target, isMobile, icons, panel, onSettle, orbitEnabled, dimmed, materialSettings }: MartinSceneProps) {
   return (
     <div className="scene-canvas">
       <Canvas
@@ -61,10 +62,10 @@ export function MartinScene({ target, isMobile, icons, panel, onSettle, orbitEna
         <directionalLight position={[-4, 2.5, -3.5]} intensity={0.7} />
 
         <Suspense fallback={null}>
-          <Martin broken={!!broken} dimmed={!!dimmed} settings={materialSettings} />
+          <Martin dimmed={!!dimmed} settings={materialSettings} />
         </Suspense>
 
-        <DesktopIcons3D icons={icons} />
+        <DesktopIcons3D icons={icons} dimmed={!!dimmed} />
 
         {panel?.kind === 'finder' && (
           <WorksSpiral3D
@@ -72,7 +73,9 @@ export function MartinScene({ target, isMobile, icons, panel, onSettle, orbitEna
             selectedWorkId={panel.selectedWorkId}
             open={panel.open}
             paused={panel.paused}
+            showPlay={panel.showPlay}
             onSelect={panel.onSelect}
+            onPlay={panel.onPlay}
           />
         )}
 

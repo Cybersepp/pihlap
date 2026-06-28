@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { CameraControls } from '@react-three/drei';
 import CameraControlsImpl from 'camera-controls';
 import { CAMERA_SMOOTH_TIME, CameraTarget } from './poses';
+import { registerCameraControls } from './liveCamera';
 
 const { ACTION } = CameraControlsImpl;
 
@@ -39,6 +40,12 @@ export function CameraRig({
   onSettleRef.current = onSettle;
 
   const { key, spec, smoothTime } = target;
+
+  // Expose the controls to the dev tuning panel (no-op in production).
+  useEffect(() => {
+    registerCameraControls(controls.current);
+    return () => registerCameraControls(null);
+  }, []);
 
   useEffect(() => {
     const c = controls.current;

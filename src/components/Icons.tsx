@@ -108,8 +108,10 @@ export function CautionIcon({ size = 38 }: IconProps) {
 
 // Small Apple logo for the menu bar
 export function AppleLogo({ size = 14 }: IconProps) {
+  // The Apple glyph is ~1.15× taller than wide; only the numeric case can be scaled.
+  const height = typeof size === 'number' ? size * 1.15 : size;
   return (
-    <svg width={size} height={size * 1.15} viewBox="0 0 16 18" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <svg width={size} height={height} viewBox="0 0 16 18" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
       <path d="M11.5 3.5c.7-.9 1.2-2.1 1.05-3.3-.95.05-2.1.6-2.85 1.4-.65.7-1.25 1.85-1.05 3.05.95.1 2-.45 2.85-1.15Zm1.55 1.85c-1.4-.08-2.6.8-3.25.8s-1.7-.75-2.85-.72c-1.45.02-2.85.85-3.6 2.15-1.55 2.65-.4 6.6 1.1 8.75.75 1.05 1.6 2.2 2.75 2.16 1.1-.05 1.5-.7 2.85-.7s1.7.7 2.85.68c1.2-.02 1.9-1.05 2.65-2.1.85-1.2 1.2-2.4 1.2-2.45-.02-.02-2.35-.9-2.4-3.55-.02-2.25 1.8-3.3 1.9-3.4-1.05-1.55-2.7-1.7-3.2-1.7Z" />
     </svg>
   );

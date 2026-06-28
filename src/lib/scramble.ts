@@ -5,12 +5,14 @@ import { useEffect, useRef, useState } from 'react';
 const GLYPHS = '!<>-_\\/[]{}—=+*^?#·:.....';
 
 // One frame of the scramble: the first `reveal` characters are locked to the
-// final text, spaces pass through, everything else is a random glyph.
-function scrambleFrame(target: string, reveal: number): string {
+// final text, spaces pass through. Unrevealed characters are random glyphs, or
+// dropped entirely when `collapse` is set (so the tail goes missing on exit).
+function scrambleFrame(target: string, reveal: number, collapse = false): string {
   let out = '';
   for (let i = 0; i < target.length; i++) {
     const ch = target[i];
     if (i < reveal || ch === ' ') out += ch;
+    else if (collapse) continue;
     else out += GLYPHS[(Math.random() * GLYPHS.length) | 0];
   }
   return out;
@@ -21,7 +23,12 @@ function scrambleFrame(target: string, reveal: number): string {
 // (encode/unscramble out). A new `text` restarts from fully scrambled. The
 // reveal cursor persists across active flips, so a click scrambles out from
 // wherever it was, and closing scrambles back in. `charsPerSec` sets the speed.
-export function useScramble(text: string, active = true, charsPerSec = 26): string {
+export function useScramble(
+  text: string,
+  active = true,
+  charsPerSec = 26,
+  collapseOnExit = false,
+): string {
   const [out, setOut] = useState(() => scrambleFrame(text, 0));
   const reveal = useRef(0); // characters currently locked in
   const prevText = useRef(text);
@@ -44,7 +51,7 @@ export function useScramble(text: string, active = true, charsPerSec = 26): stri
       } else if (reveal.current > target) {
         reveal.current = Math.max(target, reveal.current - charsPerSec * dt);
       }
-      setOut(scrambleFrame(text, Math.floor(reveal.current)));
+      setOut(scrambleFrame(text, Math.floor(reveal.current), collapseOnExit && !active));
       if (reveal.current !== target) {
         raf.current = requestAnimationFrame(tick);
       } else if (active) {
@@ -54,7 +61,7 @@ export function useScramble(text: string, active = true, charsPerSec = 26): stri
 
     raf.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf.current);
-  }, [text, active, charsPerSec]);
+  }, [text, active, charsPerSec, collapseOnExit]);
 
   return out;
 }
