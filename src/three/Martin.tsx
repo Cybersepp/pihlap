@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useGLTF, Center } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
@@ -16,12 +16,21 @@ const DIM_LEVEL = 0.4;
 export function Martin({
   dimmed = false,
   settings = DEFAULT_MATERIAL_SETTINGS,
+  onReady,
 }: {
   /** A work detail/video is open — sink the figure into the background. */
   dimmed?: boolean;
   settings?: MaterialSettings;
+  /** Fired once the GLB has resolved and the figure has mounted (intro hand-off). */
+  onReady?: () => void;
 }) {
   const { scene } = useGLTF(MODEL_URL);
+
+  // useGLTF suspended until the GLB resolved, so reaching this mount means the
+  // figure is ready — tell the intro it can settle behind him.
+  useEffect(() => {
+    onReady?.();
+  }, [onReady]);
 
   // Scene-derived bits that don't depend on the material settings.
   const { scale, box } = useMemo(() => {

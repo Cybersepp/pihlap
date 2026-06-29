@@ -1,9 +1,7 @@
 import { ReactNode } from 'react';
 import { Window3D } from './Window3D';
-
-// Fixed window size (CSS px) — scaled into the world by Window3D / GALLERY.scale.
-const WIN_W = 480;
-const WIN_H = 380;
+import { TEXT_PANEL } from './poses';
+import { useTextPanelTuning } from './useTextPanelTuning';
 
 export interface TextPanel3DProps {
   title: string;
@@ -15,6 +13,7 @@ export interface TextPanel3DProps {
 // gallery center, exactly like the Finder — so opening it swings the camera behind
 // Martin and the window scales open in the middle.
 export function TextPanel3D({ title, content, onClose }: TextPanel3DProps) {
+  useTextPanelTuning();
   return (
     <Window3D
       // Blank "paper" shown when the camera is behind the panel — same footprint
@@ -23,7 +22,7 @@ export function TextPanel3D({ title, content, onClose }: TextPanel3DProps) {
         <div
           className="text-3d-back"
           aria-hidden="true"
-          style={{ width: WIN_W, height: WIN_H }}
+          style={{ width: TEXT_PANEL.width, height: TEXT_PANEL.height }}
         />
       }
     >
@@ -31,8 +30,8 @@ export function TextPanel3D({ title, content, onClose }: TextPanel3DProps) {
         className="window text-window text-3d"
         style={{
           position: 'relative',
-          width: WIN_W,
-          height: WIN_H,
+          width: TEXT_PANEL.width,
+          height: TEXT_PANEL.height,
           pointerEvents: 'auto',
         }}
       >

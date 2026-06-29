@@ -1,5 +1,14 @@
 import { useReducer, useState } from 'react';
-import { POSES, SPIRAL } from '../three/poses';
+import {
+  POSES,
+  SPIRAL,
+  DETAIL,
+  TEXT_PANEL,
+  FOCUS_SMOOTH_TIME,
+  getLastDetailWorld,
+  getDetailPoseFromWorld,
+  notifyTextPanelChange,
+} from '../three/poses';
 import { applyPose } from '../three/liveCamera';
 
 // A dev-only live tuning panel for the works ribbon. Every control mutates the
@@ -73,6 +82,55 @@ const CAMERA_CONTROLS: Ctl[] = [
   camPos(2, -14, 14, 'camZ'),
 ];
 
+// The open-video detail view. tileYaw/grow/forward shape the tile (read every
+// frame by WorksSpiral3D, so they apply instantly); distance/pan/panY/yawFollow
+// only matter at click-time, so every edit re-issues the detail pose live from
+// the last focused tile (no-op until a video has been opened once this session).
+const reapplyDetail = (): void => {
+  const w = getLastDetailWorld();
+  if (w) applyPose(getDetailPoseFromWorld(w), FOCUS_SMOOTH_TIME);
+};
+
+const detail = (key: keyof typeof DETAIL, min: number, max: number, step: number, label: string): Ctl => ({
+  label,
+  min,
+  max,
+  step,
+  get: () => DETAIL[key],
+  set: (v) => {
+    DETAIL[key] = v;
+    reapplyDetail();
+  },
+});
+
+// Tile-shape fields read every frame by WorksSpiral3D — they apply instantly with
+// no pose re-issue, so plain mutation is enough (no reapplyDetail).
+const detailLive = (key: keyof typeof DETAIL, min: number, max: number, step: number, label: string): Ctl => ({
+  label,
+  min,
+  max,
+  step,
+  get: () => DETAIL[key],
+  set: (v) => {
+    DETAIL[key] = v;
+  },
+});
+
+const DETAIL_CONTROLS: Ctl[] = [
+  detailLive('offsetX', -5, 5, 0.05, 'tileX (left/right)'),
+  detailLive('offsetY', -4, 4, 0.05, 'tileY (up/down)'),
+  detail('pan', -5, 5, 0.05, 'pan cam (left/right)'),
+  detail('panY', -4, 4, 0.05, 'pan cam (up/down)'),
+  detail('distance', 1, 12, 0.1, 'distance (zoom)'),
+  detailLive('grow', 0, 3, 0.05, 'grow (tile size)'),
+  detailLive('forward', 0, 2, 0.05, 'forward (toward cam)'),
+  detailLive('bow', 0, 2.5, 0.05, 'bow (tile arch)'),
+  detail('tileYaw', -1.2, 1.2, 0.02, 'tileYaw (turn)'),
+  detailLive('tilePitch', -1.2, 1.2, 0.02, 'tilePitch (tip)'),
+  detailLive('tileRoll', -1.2, 1.2, 0.02, 'tileRoll (spin)'),
+  detail('yawFollow', 0, 1, 0.02, 'yawFollow'),
+];
+
 // World position the ribbon arches around. Decoupled from the camera target, so
 // moving it slides the whole ribbon within the frame. WorksSpiral3D reads
 // SPIRAL.center every frame, so edits apply instantly with no camera re-aim.
@@ -112,6 +170,37 @@ const RIBBON_ROT_CONTROLS: Ctl[] = [
   ribbonRot(2, 'rotZ'),
 ];
 
+// The text windows (contact.txt / readme.txt). Position is read every frame by
+// Window3D (instant); scale/size are React props, so each edit notifies the
+// window to re-render. Decoupled from the ribbon/gallery — these only move the
+// text windows.
+const textPanel = (
+  key: keyof typeof TEXT_PANEL,
+  min: number,
+  max: number,
+  step: number,
+  label: string,
+): Ctl => ({
+  label,
+  min,
+  max,
+  step,
+  get: () => TEXT_PANEL[key],
+  set: (v) => {
+    TEXT_PANEL[key] = v;
+    notifyTextPanelChange();
+  },
+});
+
+const TEXT_PANEL_CONTROLS: Ctl[] = [
+  textPanel('shiftRight', -6, 6, 0.05, 'shiftRight (left/right)'),
+  textPanel('shiftUp', -4, 4, 0.05, 'shiftUp (up/down)'),
+  textPanel('pushback', 0, 6, 0.05, 'pushback (depth)'),
+  textPanel('scale', 0.05, 0.6, 0.005, 'scale (size)'),
+  textPanel('width', 200, 900, 10, 'width (px)'),
+  textPanel('height', 200, 900, 10, 'height (px)'),
+];
+
 const panel: React.CSSProperties = {
   position: 'fixed',
   top: 12,
@@ -130,6 +219,10 @@ const panel: React.CSSProperties = {
   boxShadow: '0 8px 30px rgba(0,0,0,0.45)',
   userSelect: 'none',
 };
+
+// Its own floating window in the same top-right slot as the ribbon panel (the
+// two are mutually exclusive — opening a text window closes the gallery).
+const textWindowPanel: React.CSSProperties = { ...panel, width: 200 };
 
 const row: React.CSSProperties = { marginBottom: 8 };
 const section: React.CSSProperties = {
@@ -162,11 +255,13 @@ export function RibbonControls() {
     const cam = CAMERA_CONTROLS.map((c) => round(c.get()));
     const pos = RIBBON_POS_CONTROLS.map((c) => round(c.get()));
     const rot = RIBBON_ROT_CONTROLS.map((c) => round(c.get()));
+    const det = DETAIL_CONTROLS.map((c) => `  ${c.label.split(' ')[0]}: ${round(c.get())},`);
     const text =
       `// tuned ribbon values\n${lines.join('\n')}\n` +
       `// SPIRAL.center\n[${pos.join(', ')}]\n` +
       `// SPIRAL.rotation\n[${rot.join(', ')}]\n` +
-      `// POSES.gallery.position\n[${cam.join(', ')}]`;
+      `// POSES.gallery.position\n[${cam.join(', ')}]\n` +
+      `// DETAIL\n${det.join('\n')}`;
     navigator.clipboard?.writeText(text).then(
       () => {
         setCopied(true);
@@ -207,6 +302,54 @@ export function RibbonControls() {
           ))}
           <div style={section}>camera (selected works rest)</div>
           {CAMERA_CONTROLS.map((c) => (
+            <Slider key={c.label} ctl={c} onChange={force} />
+          ))}
+          <div style={section}>detail (open video)</div>
+          {DETAIL_CONTROLS.map((c) => (
+            <Slider key={c.label} ctl={c} onChange={force} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// The text-window tuner, a SEPARATE floating panel docked to the left of the
+// ribbon panel. Self-contained (own collapse/copy state) so it reads as its own
+// window rather than a section inside the ribbon controls.
+export function TextWindowControls() {
+  const [, force] = useReducer((c) => c + 1, 0);
+  const [open, setOpen] = useState(true);
+  const [copied, setCopied] = useState(false);
+
+  const copy = () => {
+    const txt = TEXT_PANEL_CONTROLS.map((c) => `  ${c.label.split(' ')[0]}: ${round(c.get())},`);
+    navigator.clipboard?.writeText(`// TEXT_PANEL\n${txt.join('\n')}`).then(
+      () => {
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1200);
+      },
+      () => {},
+    );
+  };
+
+  return (
+    <div style={textWindowPanel}>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: open ? 10 : 0 }}>
+        <strong style={{ fontSize: 12, flex: 1 }}>text windows</strong>
+        {open && (
+          <button style={{ ...btn, flex: 'none', padding: '3px 8px' }} onClick={copy}>
+            {copied ? 'copied ✓' : 'copy'}
+          </button>
+        )}
+        <button style={{ ...btn, flex: 'none', padding: '3px 9px' }} onClick={() => setOpen((o) => !o)}>
+          {open ? '–' : '+'}
+        </button>
+      </div>
+
+      {open && (
+        <div style={{ overflowY: 'auto', minHeight: 0 }}>
+          {TEXT_PANEL_CONTROLS.map((c) => (
             <Slider key={c.label} ctl={c} onChange={force} />
           ))}
         </div>

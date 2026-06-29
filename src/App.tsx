@@ -19,7 +19,8 @@ import { works, Work } from './data/works';
 import { DEFAULT_MATERIAL_SETTINGS } from './three/materialSettings';
 import { readMeText } from './data/content';
 import { ContactCard } from './components/ContactCard';
-import { RibbonControls } from './components/RibbonControls';
+import { RibbonControls, TextWindowControls } from './components/RibbonControls';
+import { SignatureIntro } from './components/SignatureIntro';
 import { shouldUseMobileLayout } from './lib/device';
 
 // The 3D layer pulls in three.js + drei (~900KB). Code-split it so the desktop
@@ -40,6 +41,12 @@ type SelectedIcon = 'works' | 'contact' | 'readme' | null;
 
 const focusKeyFor = (workId: string) => `focus:${workId}`;
 
+// How long after a window closes (camera starting its swing back to rest) before
+// the signature remounts and begins drawing. Less than the camera's settle so the
+// ink is already flowing as Martin arrives; SignatureIntro's own START_DELAY_MS
+// adds the final beat before the first stroke lands.
+const INTRO_REDRAW_LEAD_MS = 450;
+
 export default function App() {
   const [windowState, setWindowState] = useState<WindowState>({ type: 'none' });
   const [selectedIcon, setSelectedIcon] = useState<SelectedIcon>(null);
@@ -47,7 +54,15 @@ export default function App() {
   // *into* the folder on close: 'open' (spilled out), 'closing' (flying back —
   // still mounted), 'closed' (unmounted).
   const [worksPhase, setWorksPhase] = useState<'open' | 'closing' | 'closed'>('closed');
-  const [isMobile, setIsMobile] = useState(false);
+  // Initialised synchronously so the desktop-only intro never flashes on a phone.
+  const [isMobile, setIsMobile] = useState(() => shouldUseMobileLayout());
+  // Flips true once the 3D figure's GLB has resolved — hands off from the intro draw.
+  const [modelReady, setModelReady] = useState(false);
+  // Keys the intro so it remounts and redraws from scratch each return to rest.
+  const [introRun, setIntroRun] = useState(0);
+  // Erased state: true wipes the signature out and holds it hidden until the camera
+  // is back at the rest pose, at which point it remounts and redraws.
+  const [introHidden, setIntroHidden] = useState(false);
   // The camera target key the rig has actually finished settling into, or null
   // while a move is in progress. Used to delay revealing the video until the
   // camera reaches the focused tile — never trusting a stale destination.
@@ -223,6 +238,23 @@ export default function App() {
   // rest reverses it.
   const broken = windowState.type !== 'none';
 
+  // Erase the signature the instant any window opens.
+  useEffect(() => {
+    if (broken) setIntroHidden(true);
+  }, [broken]);
+
+  // Redraw a beat before the camera finishes returning to rest, so the ink is
+  // already flowing as Martin swings back into place rather than after he lands.
+  // Keyed off the close (broken→false) on a short lead rather than the settle.
+  useEffect(() => {
+    if (broken || !introHidden) return;
+    const t = window.setTimeout(() => {
+      setIntroHidden(false);
+      setIntroRun((r) => r + 1);
+    }, INTRO_REDRAW_LEAD_MS);
+    return () => window.clearTimeout(t);
+  }, [broken, introHidden]);
+
   // The DOM video only opens once the camera has actually arrived in front of the
   // focused tile (settledKey matches) — never early during the fly-in.
   const videoVisible =
@@ -271,6 +303,11 @@ export default function App() {
       {/* Dark studio backdrop, crossfaded in over the sky once the 4th wall breaks. */}
       <div className={`studio${broken ? ' is-visible' : ''}`} aria-hidden="true" />
 
+      {/* Intro flourish: the name draws itself while the 3D bundle streams in, then
+          settles to a faint backdrop behind the figure. On mobile the SVG scales
+          down via .signature-intro__svg's media query. */}
+      <SignatureIntro key={`intro-${introRun}`} modelReady={modelReady} dismissed={introHidden} />
+
       {/* 3D Martin + world-anchored icons + (while a window is open) its 3D panel. */}
       <Suspense fallback={null}>
         <MartinScene
@@ -279,9 +316,12 @@ export default function App() {
           icons={sceneIcons}
           panel={panel}
           onSettle={setSettledKey}
-          // The spiral gallery owns wheel/touch (scroll winds the helix), so the
-          // camera rig's drag/dolly stays disabled throughout.
-          orbitEnabled={false}
+          onModelReady={() => setModelReady(true)}
+          // The spiral gallery owns wheel/touch (scroll winds the helix) and the
+          // detail/video share a fixed framing, so orbit stays off there. The
+          // text panels (contact/readme) have nothing competing for gestures, so
+          // the user may orbit around Martin while they're open.
+          orbitEnabled={windowState.type === 'contact' || windowState.type === 'readme'}
           dimmed={workOpen}
           materialSettings={DEFAULT_MATERIAL_SETTINGS}
         />
@@ -293,14 +333,19 @@ export default function App() {
           <WorkDetailOverlay
             key={`detail-${windowState.work.id}`}
             work={windowState.work}
-            onPlay={playSelected}
             onClose={closeDetail}
           />
         )}
       </AnimatePresence>
 
-      {/* Dev-only live tuning panel for the works ribbon (shown while it's open). */}
+      {/* Dev-only live tuning panels. The ribbon panel shows while the gallery is
+          open; the text-window panel is a separate window docked beside it, shown
+          while contact/readme is open. */}
       {import.meta.env.DEV && worksPhase !== 'closed' && <RibbonControls />}
+      {import.meta.env.DEV &&
+        (windowState.type === 'contact' || windowState.type === 'readme') && (
+          <TextWindowControls />
+        )}
 
       {/* Cinematic focus dimmer behind the open video (fades the scene periphery). */}
       <div className={`focus-vignette${videoVisible ? ' is-visible' : ''}`} aria-hidden="true" />

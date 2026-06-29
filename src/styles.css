@@ -283,6 +283,33 @@ button { font: inherit; color: inherit; }
   pointer-events: none;
 }
 
+/* The "Martin Pihlap" intro draw. Sits at the backdrop layer (below z-figure: 1),
+   so while the figure streams in it shows through the empty/transparent canvas, and
+   once the figure renders it stays behind him as a faint backdrop. See SignatureIntro. */
+.signature-intro {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-desktop);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.signature-intro__svg {
+  width: clamp(240px, 46vw, 620px);
+  height: auto;
+  overflow: visible;
+}
+
+/* On a narrow portrait phone the desktop clamp floor is too wide; size the
+   signature to a fraction of the viewport so it sits centered with margin. */
+@media (max-width: 768px) {
+  .signature-intro__svg {
+    width: min(82vw, 460px);
+  }
+}
+
 .desktop-icon {
   display: flex;
   flex-direction: column;

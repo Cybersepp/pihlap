@@ -116,36 +116,65 @@ export function iconColumnLayout(aspect: number): { x: number; scale: number } {
 export const GALLERY = {
   /** Center of the window panel — shared with the gallery camera target. */
   center: GALLERY_CENTER,
-  /** Html `transform` scale for the whole Finder window. drei applies a hidden
-   *  ÷40 factor, so on-screen world width ≈ panelPx × scale / 40. */
-  scale: 0.2,
   /** Y rotation (radians) so the window faces the gallery camera on the far side. */
   faceY: Math.PI,
 };
 
-// The text windows (contact.txt / readme.txt) sit FARTHER from the Martin than
-// the video panel, so they don't crowd the model. We push them straight back
-// ALONG the gallery camera's view ray (camera → GALLERY_CENTER), so they stay
-// dead-centre on screen — only their distance from the model changes. Bump
-// TEXT_PANEL_PUSHBACK to move them further still; the video center is unaffected.
-export const TEXT_PANEL_PUSHBACK = 1.6;
-// Slide the text windows along the gallery camera's right vector so they sit a
-// little right of centre on screen (the camera views at an angle, so a plain
-// world-X shift would read as diagonal).
-export const TEXT_PANEL_SHIFT_RIGHT = 1.5;
-export const TEXT_PANEL_CENTER: [number, number, number] = (() => {
+// ── Text windows (contact.txt / readme.txt) ──────────────────────────────────
+// The text windows sit FARTHER from the Martin than the video panel so they don't
+// crowd the model. They're pushed back ALONG the gallery camera's view ray
+// (camera → GALLERY_CENTER) so they stay centred, then slid along the camera's
+// screen-right / screen-up axes (a plain world-X shift would read as diagonal
+// since the camera views at an angle). This is their OWN mutable object, fully
+// decoupled from GALLERY/SPIRAL, so the dev panel can tune position AND size live
+// without touching the ribbon/gallery.
+export const TEXT_PANEL = {
+  /** Distance pushed back from the model along the camera→center ray. */
+  pushback: 1.6,
+  /** Screen-right slide (world units). Negative = left on screen. */
+  shiftRight: 0.1,
+  /** Screen-up slide (world units). Positive = up on screen. */
+  shiftUp: 0.55,
+  /** Html `transform` scale for the whole window. drei applies a hidden ÷40
+   *  factor, so on-screen world width ≈ width × scale / 40. */
+  scale: 0.28,
+  /** Window footprint in CSS px, scaled into the world by `scale`. */
+  width: 480,
+  height: 380,
+};
+
+// World position of the text window, derived LIVE from TEXT_PANEL so dev-panel
+// edits move it instantly. Writes into `out`.
+const _tpDir = new THREE.Vector3();
+const _tpRight = new THREE.Vector3();
+export function textPanelCenter(out: THREE.Vector3): THREE.Vector3 {
   const cam = POSES.gallery.position;
-  const c = GALLERY_CENTER;
-  const dir = [c[0] - cam[0], c[1] - cam[1], c[2] - cam[2]];
-  const len = Math.hypot(dir[0], dir[1], dir[2]) || 1;
-  const k = TEXT_PANEL_PUSHBACK / len;
-  const base = [c[0] + dir[0] * k, c[1] + dir[1] * k, c[2] + dir[2] * k];
-  // Screen-right = normalize(forward × worldUp), forward = camera → center.
-  const right = [-dir[2], 0, dir[0]];
-  const rlen = Math.hypot(right[0], right[1], right[2]) || 1;
-  const s = TEXT_PANEL_SHIFT_RIGHT / rlen;
-  return [base[0] + right[0] * s, base[1] + right[1] * s, base[2] + right[2] * s];
-})();
+  const [cx, cy, cz] = GALLERY_CENTER;
+  _tpDir.set(cx - cam[0], cy - cam[1], cz - cam[2]);
+  const len = _tpDir.length() || 1;
+  out.copy(_tpDir).multiplyScalar(TEXT_PANEL.pushback / len);
+  out.x += cx;
+  out.y += cy + TEXT_PANEL.shiftUp;
+  out.z += cz;
+  // Screen-right = forward × worldUp (horizontal), forward = camera → center.
+  _tpRight.set(-_tpDir.z, 0, _tpDir.x);
+  const rlen = _tpRight.length() || 1;
+  return out.addScaledVector(_tpRight, TEXT_PANEL.shiftRight / rlen);
+}
+
+// Tiny pub/sub so the dev panel's TEXT_PANEL edits trigger a re-render of the
+// window components. Position is read per-frame (live by default), but the DOM
+// size + Html scale are React props, so they need a re-render to apply live.
+const _textPanelListeners = new Set<() => void>();
+export function onTextPanelChange(cb: () => void): () => void {
+  _textPanelListeners.add(cb);
+  return () => {
+    _textPanelListeners.delete(cb);
+  };
+}
+export function notifyTextPanelChange(): void {
+  _textPanelListeners.forEach((cb) => cb());
+}
 
 // ── 3D works cloud ──────────────────────────────────────────────────────────
 // The works are free-floating ".mov" files scattered in a loose cloud around the
@@ -245,9 +274,9 @@ export const SPIRAL = {
   /** Depth (world units) of the solid bezel shell behind each video, giving the
    *  tiles real thickness you see as they turn on the ribbon. 0 = flat card (no
    *  thickness); ~0.04 = thin card; larger = a chunky slab. Tune live. */
-  thickness: 0.04,
+  thickness: 0.08,
   /** Brightness of the bezel edge, 0 (black) → 1 (white). ~0.23 is a dark grey. */
-  bezel: 0.23,
+  bezel: 0.05,
 };
 
 // The integer slot congruent to `i (mod n)` nearest the scroll position `s`.
@@ -266,14 +295,26 @@ function bellSlope(phase: number): number {
   return bell(phase) * (-2 * phase) / (SPIRAL.archWidth * SPIRAL.archWidth);
 }
 
-// The ribbon's rigid rotation (SPIRAL.rotation) as a quaternion, rebuilt on each
-// call from the live Euler so dev-panel edits apply instantly. Scratch-backed.
+// The ribbon's rigid rotation (SPIRAL.rotation) as a quaternion. Rebuilt from the
+// live Euler only when the rotation values actually change (dev-panel edits) —
+// otherwise the cached quaternion is returned. This is called ~100k times/sec
+// during conform, so the Euler→quaternion trig is memoized against the last
+// rotation. Scratch-backed.
 const _spiralRotE = new THREE.Euler();
 const _spiralRotQ = new THREE.Quaternion();
+let _spiralRotCacheX = NaN;
+let _spiralRotCacheY = NaN;
+let _spiralRotCacheZ = NaN;
 function spiralRotation(): THREE.Quaternion {
   const [rx, ry, rz] = SPIRAL.rotation;
-  _spiralRotE.set(rx, ry, rz);
-  return _spiralRotQ.setFromEuler(_spiralRotE);
+  if (rx !== _spiralRotCacheX || ry !== _spiralRotCacheY || rz !== _spiralRotCacheZ) {
+    _spiralRotE.set(rx, ry, rz);
+    _spiralRotQ.setFromEuler(_spiralRotE);
+    _spiralRotCacheX = rx;
+    _spiralRotCacheY = ry;
+    _spiralRotCacheZ = rz;
+  }
+  return _spiralRotQ;
 }
 
 // World position of a tile at a given phase (= slot - s). phase 0 sits at the
@@ -354,48 +395,82 @@ export function ribbonUp(phase: number, out: THREE.Vector3): THREE.Vector3 {
   return out.set(0, 1, 0).applyQuaternion(_ribbonUpQ);
 }
 
-// How far in front of a clicked file the camera sits before the video opens.
-// Kept large so the camera only nudges/reframes a little — the tile's own
-// expand-toward-camera does the work of "coming forward", and the camera move
-// just adds parallax depth.
-export const FOCUS_DISTANCE = 5;
+// ── Detail / open-video view ─────────────────────────────────────────────────
+// Everything about where the clicked video lands and how it expands. One mutable
+// object (like SPIRAL) so the dev panel can tune it live: getFocus/DetailPose read
+// it fresh on every re-issue, and WorksSpiral3D reads the tile-flourish fields
+// (tileYaw/grow/forward) every frame. Tune live, then `copy` to paste back here.
+export const DETAIL = {
+  /** How far in front of a clicked file the camera sits. Larger = camera stays
+   *  back (tile reads smaller, more parallax); the tile's own expand does the
+   *  "coming forward". */
+  distance: 5.5,
+  /** Screen-right pan of the whole view so the tile sits left-of-centre, leaving
+   *  room for the info panel. Negative = left (the gallery camera views from -Z,
+   *  so its screen-right is world -X); flip the sign to put it on the right. */
+  pan: -1.55,
+  /** Vertical pan of the view (world +Y up). Slides the tile up/down on screen. */
+  panY: 0.45,
+  /** Radians the opening tile yaws to the right as it expands. Shared with the
+   *  tile flourish AND the camera reframe (via yawFollow). Flip to turn the other
+   *  way. */
+  tileYaw: 0.34,
+  /** Radians the opening tile pitches as it expands — tips its top toward(+)/away(−)
+   *  from the viewer (rotation about the screen-horizontal axis). */
+  tilePitch: 0.16,
+  /** Radians the opening tile rolls as it expands — spins in the screen plane,
+   *  clockwise(+)/counter-clockwise(−). */
+  tileRoll: -0.06,
+  /** How much of the YAW the camera follows: 0 = ignore the turn, 1 = swing fully
+   *  around so the turned tile reads head-on. (Pitch/roll are tile-only.) */
+  yawFollow: 0.8,
+  /** Extra scale the opening tile grows by (× its base size). */
+  grow: 0.45,
+  /** World units the opening tile drifts toward the camera. */
+  forward: 0.4,
+  /** Screen-space nudge of the OPENING TILE ITSELF (not the camera), eased in with
+   *  the open animation. offsetX = right(+)/left(−), offsetY = up(+)/down(−), in
+   *  world units along the camera's right/up axes. Use these to reposition the
+   *  open video; use pan/panY to move the camera framing instead. */
+  offsetX: -0.3,
+  offsetY: 0.55,
+  /** Widthwise curvature of the OPEN tile only, eased in as it opens: 0 = flat
+   *  panel, 1 = the ribbon's natural arch, >1 = exaggerated bow. Other tiles keep
+   *  their natural curvature. */
+  bow: 0,
+};
 
-// The opening tile yaws this many radians to the right as it expands. Shared with
-// WorksSpiral3D so the camera reframe can follow it. Flip the sign to turn the
-// other way; both the tile and the camera swing follow this one constant.
-export const FOCUS_TILE_YAW = 0.3;
-// How much of that yaw the camera follows: 0 = ignore the turn, 1 = swing fully
-// around so the turned tile reads head-on. Partial keeps the turn visible while
-// still framing it nicely.
-export const FOCUS_YAW_FOLLOW = 0.8;
+// The last tile world position the detail pose was framed from. Remembered so the
+// dev panel can re-issue the detail pose live when a DETAIL slider moves (the
+// pose is otherwise only computed at click-time, unlike the per-frame SPIRAL).
+let _lastDetailWorld: [number, number, number] | null = null;
+export function getLastDetailWorld(): [number, number, number] | null {
+  return _lastDetailWorld;
+}
 
 // Convert a point on the window panel (its measured world position) into a camera
-// pose that frames it head-on, sitting FOCUS_DISTANCE in front along the panel's
+// pose that frames it head-on, sitting DETAIL.distance in front along the panel's
 // facing normal. Used to fly the camera to the clicked file.
 export function getFocusPoseFromWorld(world: [number, number, number]): PoseSpec {
   // Swing the camera partway around the tile in the same direction it yaws, so the
   // reframe respects the turn rather than fighting it (a = faceY + followed yaw).
-  const a = GALLERY.faceY + FOCUS_TILE_YAW * FOCUS_YAW_FOLLOW;
+  const a = GALLERY.faceY + DETAIL.tileYaw * DETAIL.yawFollow;
   const nx = Math.sin(a);
   const nz = Math.cos(a);
   return {
-    position: [world[0] + nx * FOCUS_DISTANCE, world[1], world[2] + nz * FOCUS_DISTANCE],
+    position: [world[0] + nx * DETAIL.distance, world[1], world[2] + nz * DETAIL.distance],
     target: world,
   };
 }
 
-// World-X pan applied to the DETAIL view so the selected tile sits in the LEFT
-// third, leaving room for the info panel on the right. Negative pushes the tile
-// left (the gallery camera views from -Z, so its screen-right is world -X). Flip
-// the sign to put the tile on the right instead.
-export const DETAIL_PAN = -1.2;
-
-// Detail pose: the focus pose, panned sideways so the tile reads left-of-centre.
-// Panning camera AND target by the same vector is a pure pan (perspective intact).
+// Detail pose: the focus pose, panned sideways + vertically so the tile reads
+// left-of-centre. Panning camera AND target by the same vector is a pure pan
+// (perspective intact).
 export function getDetailPoseFromWorld(world: [number, number, number]): PoseSpec {
+  _lastDetailWorld = world;
   const f = getFocusPoseFromWorld(world);
   return {
-    position: [f.position[0] + DETAIL_PAN, f.position[1], f.position[2]],
-    target: [f.target[0] + DETAIL_PAN, f.target[1], f.target[2]],
+    position: [f.position[0] + DETAIL.pan, f.position[1] + DETAIL.panY, f.position[2]],
+    target: [f.target[0] + DETAIL.pan, f.target[1] + DETAIL.panY, f.target[2]],
   };
 }

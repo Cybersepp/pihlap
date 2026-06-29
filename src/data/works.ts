@@ -13,6 +13,7 @@ export interface Work {
   loopUrl: string;
   fullPieceUrl: string;
   vimeoUrl?: string;
+  youtubeUrl?: string;
   /** Optional custom floating-icon image (public path). Falls back to the .mov glyph. */
   icon?: string;
 }
@@ -30,6 +31,7 @@ export const works: Work[] = [
     loopUrl: publicAsset("loops/fakov-mens-health.mp4"),
     fullPieceUrl: "https://vimeo.com/1197106634",
     vimeoUrl: "https://vimeo.com/1197106634",
+    youtubeUrl: "https://youtu.be/Bby2-NSxSkU",
   },
   {
     id: "ff2023-aftermovie",
@@ -55,6 +57,7 @@ export const works: Work[] = [
     loopUrl: publicAsset("loops/jessica-week-ago.mp4"),
     fullPieceUrl: "https://vimeo.com/1196918333",
     vimeoUrl: "https://vimeo.com/1196918333",
+    youtubeUrl: "https://youtu.be/VtcuQWSW4dc",
   },
   {
     id: "jessica-posted",
@@ -68,6 +71,7 @@ export const works: Work[] = [
     loopUrl: publicAsset("loops/jessica-posted.mp4"),
     fullPieceUrl: "https://vimeo.com/1002265424",
     vimeoUrl: "https://vimeo.com/1002265424",
+    youtubeUrl: "https://youtu.be/9xcDLqMrV_M",
     icon: publicAsset("lada.png"),
   },
   {
@@ -82,6 +86,7 @@ export const works: Work[] = [
     loopUrl: publicAsset("loops/kai-angel-prada-party.mp4"),
     fullPieceUrl: "https://vimeo.com/1196916186",
     vimeoUrl: "https://vimeo.com/1196916186",
+    youtubeUrl: "https://youtu.be/OmQU0bCWV_0",
   },
   {
     id: "makeover-intro",
@@ -95,6 +100,7 @@ export const works: Work[] = [
     loopUrl: publicAsset("loops/makeover-intro.mp4"),
     fullPieceUrl: "https://vimeo.com/1196916569",
     vimeoUrl: "https://vimeo.com/1196916569",
+    youtubeUrl: "https://youtu.be/2rPJZjVMNig",
   },
   {
     id: "makeover-s01e01",
@@ -108,6 +114,7 @@ export const works: Work[] = [
     loopUrl: publicAsset("loops/makeover-s01e01.mp4"),
     fullPieceUrl: "https://vimeo.com/1197106210",
     vimeoUrl: "https://vimeo.com/1197106210",
+    youtubeUrl: "https://youtu.be/KIDu0jjdXww",
   },
   {
     id: "mihhail-dream-blunt",
@@ -121,6 +128,7 @@ export const works: Work[] = [
     loopUrl: publicAsset("loops/mihhail-dream-blunt.mp4"),
     fullPieceUrl: "https://vimeo.com/1196916999",
     vimeoUrl: "https://vimeo.com/1196916999",
+    youtubeUrl: "https://youtu.be/zR1BuWZ-H7g",
   },
   {
     id: "moment",
@@ -133,6 +141,7 @@ export const works: Work[] = [
     loopUrl: publicAsset("loops/moment.mp4"),
     fullPieceUrl: "https://vimeo.com/1196919620",
     vimeoUrl: "https://vimeo.com/1196919620",
+    youtubeUrl: "https://youtu.be/KOQ1X2CSa3E",
   },
   {
     id: "racer-remagine",
@@ -159,6 +168,7 @@ export const works: Work[] = [
     loopUrl: publicAsset("loops/racer-ss25.mp4"),
     fullPieceUrl: "https://vimeo.com/1196920285",
     vimeoUrl: "https://vimeo.com/1196920285",
+    youtubeUrl: "https://youtu.be/2wAlFSHVOes",
   },
   {
     id: "thrill-pill-plastik",
@@ -172,5 +182,6 @@ export const works: Work[] = [
     loopUrl: publicAsset("loops/thrill-pill-plastik.mp4"),
     fullPieceUrl: "https://vimeo.com/1196919826",
     vimeoUrl: "https://vimeo.com/1196919826",
+    youtubeUrl: "https://youtu.be/i0G8Zhb139k",
   },
 ];

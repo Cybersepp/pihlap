@@ -40,6 +40,8 @@ interface MartinSceneProps {
   dimmed?: boolean;
   /** Live material settings from the dev panel (defaults applied in production). */
   materialSettings?: MaterialSettings;
+  /** Fired once the figure's GLB has resolved and mounted (intro hand-off). */
+  onModelReady?: () => void;
 }
 
 // Full-screen transparent 3D layer that replaces the old corner portrait.
@@ -47,7 +49,7 @@ interface MartinSceneProps {
 // the Martin figure + lighting + the camera rig, plus the world-anchored desktop icons
 // and (while a window is open) a 3D window panel floating in the gallery center.
 // Lighting is a simple three-point rig (no HDRI / network dependency).
-export function MartinScene({ target, isMobile, icons, panel, onSettle, orbitEnabled, dimmed, materialSettings }: MartinSceneProps) {
+export function MartinScene({ target, isMobile, icons, panel, onSettle, orbitEnabled, dimmed, materialSettings, onModelReady }: MartinSceneProps) {
   return (
     <div className="scene-canvas">
       <Canvas
@@ -62,7 +64,7 @@ export function MartinScene({ target, isMobile, icons, panel, onSettle, orbitEna
         <directionalLight position={[-4, 2.5, -3.5]} intensity={0.7} />
 
         <Suspense fallback={null}>
-          <Martin dimmed={!!dimmed} settings={materialSettings} />
+          <Martin dimmed={!!dimmed} settings={materialSettings} onReady={onModelReady} />
         </Suspense>
 
         <DesktopIcons3D icons={icons} dimmed={!!dimmed} />

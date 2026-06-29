@@ -7,7 +7,7 @@ import { IconClickOrigin } from '../components/DesktopIcon';
 import { WorkTitle } from '../components/WorkTitle';
 import {
   SPIRAL,
-  FOCUS_TILE_YAW,
+  DETAIL,
   nearestCongruentSlot,
   spiralPosition,
   ribbonFrame,
@@ -41,8 +41,8 @@ const SCROLL_DAMP = 7; // how briskly s follows sTarget
 const STAGGER = 0.05; // seconds between each tile's spill, cascading top→bottom
 const SPILL_SETTLE_MS = 700; // extra settle after the last tile before the center lights up
 // Open flourish: the clicked tile expands toward the camera as the video opens.
-const OPEN_GROW = 0.8; // extra scale the opening tile grows by (× its base size)
-const OPEN_FORWARD = 0.4; // world units the opening tile drifts toward the camera
+// Magnitudes (grow / forward / yaw) live in DETAIL (poses.ts) so they're tunable
+// live alongside the camera pose; only the easing rates stay local here.
 const OPEN_RATE_Y = 4; // vertical growth speed — leads horizontal for an elastic feel
 const OPEN_RATE_X = 3.5; // horizontal growth speed — slower than vertical
 const BG_DIM = 0.18; // brightness the non-selected tiles sink to when a work is open
@@ -51,8 +51,10 @@ const POP_SCALE = 0.16; // how much bigger the centered tile is than the rest
 const POP_FORWARD = 0.35; // world units the centered tile sits toward the camera
 const POP_RANGE = 1; // slots from center over which the pop falls off to nothing
 
-// World up — axis the opening tile yaws about so the turn stays vertical.
+// World axes the opening tile rotates about: up = yaw, right = pitch, forward = roll.
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
+const WORLD_RIGHT = new THREE.Vector3(1, 0, 0);
+const WORLD_FWD = new THREE.Vector3(0, 0, 1);
 
 // Each work has its own 3s loop (loops/<id>.mp4) and a frozen poster frame
 // (loops/<id>.jpg). Every tile samples its own poster at rest; only the centered,
@@ -131,12 +133,19 @@ function conformTile(
   sp: [number, number, number],
   qc: THREE.Quaternion,
   geoms: ConformGeoms,
+  bow = 1,
 ) {
   const span = SPIRAL.fill; // phase-width of one tile (leaves a gap < 1 step)
   const tileH = SPIRAL.tile[1];
   const t = SPIRAL.thickness;
   _qcInv.copy(qc).invert();
   _pc.set(sp[0], sp[1], sp[2]);
+  // When `bow` ≠ 1 the tile's widthwise curvature is rescaled relative to a FLAT
+  // chord between its two width edges: bow 0 = flat panel, 1 = ribbon's natural
+  // curvature, >1 = exaggerated. Used to flatten/curve the OPEN tile on its own.
+  const flat = bow !== 1;
+  const eL = flat ? spiralPosition(phase + 0.5 * span) : null; // vx = -0.5 edge
+  const eR = flat ? spiralPosition(phase - 0.5 * span) : null; // vx = +0.5 edge
   // Place a canonical (sx, sy) onto the ribbon surface, in the tile's local frame.
   // The width runs along -path (`phase - vx`): the frame maps world +X to local
   // -X, so sampling this way keeps the front face toward the camera (visible +
@@ -144,8 +153,20 @@ function conformTile(
   const place = (vx: number, vy: number, out: THREE.Vector3) => {
     const u = phase - vx * span;
     const su = spiralPosition(u);
+    let sx = su[0];
+    let sy = su[1];
+    let sz = su[2];
+    if (flat && eL && eR) {
+      const k = vx + 0.5; // 0 at left edge → 1 at right edge
+      const cx = eL[0] + (eR[0] - eL[0]) * k;
+      const cy = eL[1] + (eR[1] - eL[1]) * k;
+      const cz = eL[2] + (eR[2] - eL[2]) * k;
+      sx = cx + (su[0] - cx) * bow;
+      sy = cy + (su[1] - cy) * bow;
+      sz = cz + (su[2] - cz) * bow;
+    }
     ribbonUp(u, _hu);
-    out.set(su[0] + vy * tileH * _hu.x, su[1] + vy * tileH * _hu.y, su[2] + vy * tileH * _hu.z);
+    out.set(sx + vy * tileH * _hu.x, sy + vy * tileH * _hu.y, sz + vy * tileH * _hu.z);
     return out.sub(_pc).applyQuaternion(_qcInv);
   };
   // Front video face.
@@ -278,6 +299,12 @@ function SpiralItem({
   const prevOpen = useRef(open);
   const growX = useRef(0); // horizontal open-expansion 0→1
   const growY = useRef(0); // vertical open-expansion 0→1 (leads X)
+  // conformTile is camera-independent — its output depends ONLY on phase and bow.
+  // Remember the last values it was run with so we can skip the (expensive) re-place
+  // when neither has changed (i.e. the helix is sitting still). Initialised to
+  // Infinity so the first frame always conforms.
+  const lastConformPhase = useRef(Infinity);
+  const lastConformBow = useRef(Infinity);
 
   useFrame((state, dt) => {
     const g = group.current;
@@ -313,7 +340,7 @@ function SpiralItem({
     // Drift toward the camera: the centered tile pops forward a little; the opening
     // tile (detail/video) pushes much further still.
     const grow = (growX.current + growY.current) * 0.5;
-    const forward = centered * POP_FORWARD + grow * OPEN_FORWARD;
+    const forward = centered * POP_FORWARD + grow * DETAIL.forward;
     if (forward > 0.0001) {
       const cam = state.camera.position;
       const dx = cam.x - px;
@@ -323,6 +350,17 @@ function SpiralItem({
       px += dx * f;
       py += dy * f;
       pz += dz * f;
+    }
+    // Screen-space reposition of the opening tile itself (independent of the camera
+    // pan): slide it along the camera's right/up axes, eased in by `grow` so only
+    // the focused/open tile moves and it tracks the open animation.
+    if (grow > 0.0001 && (DETAIL.offsetX !== 0 || DETAIL.offsetY !== 0)) {
+      const m = state.camera.matrixWorld.elements;
+      const ox = DETAIL.offsetX * grow;
+      const oy = DETAIL.offsetY * grow;
+      px += m[0] * ox + m[4] * oy;
+      py += m[1] * ox + m[5] * oy;
+      pz += m[2] * ox + m[6] * oy;
     }
     g.position.set(px, py, pz);
     // Orient to the ribbon (faces outward, banked along the climb) instead of
@@ -334,14 +372,33 @@ function SpiralItem({
     // Warp the tile's geometry onto the ribbon surface around its phase so its
     // edges line up with its neighbours (baked relative to the same spine+frame
     // the group transform uses, so spill/pop/open still animate it).
-    conformTile(phase, sp, qc.current, geoms);
+    // Bow override eases in only for the opening tile (grow ≈ 0 elsewhere), so the
+    // rest of the ribbon keeps its natural curvature.
+    // conformTile depends ONLY on phase + bow (not the camera), so skip it when
+    // neither has moved — the helix at rest re-placed identical vertices every
+    // frame. In DEV the live tuning panel mutates SPIRAL without changing phase,
+    // so always conform there to keep the sliders responsive.
+    const bow = 1 + (DETAIL.bow - 1) * grow;
+    if (
+      import.meta.env.DEV ||
+      Math.abs(phase - lastConformPhase.current) > 1e-5 ||
+      Math.abs(bow - lastConformBow.current) > 1e-5
+    ) {
+      conformTile(phase, sp, qc.current, geoms, bow);
+      lastConformPhase.current = phase;
+      lastConformBow.current = bow;
+    }
     // Yaw a touch to the right as it opens; the focus camera follows this same
-    // turn (FOCUS_YAW_FOLLOW in poses.ts) so the reframe respects it.
-    if (grow > 0.0001) g.rotateOnWorldAxis(WORLD_UP, FOCUS_TILE_YAW * grow);
+    // turn (DETAIL.yawFollow in poses.ts) so the reframe respects it.
+    if (grow > 0.0001) {
+      g.rotateOnWorldAxis(WORLD_UP, DETAIL.tileYaw * grow);
+      if (DETAIL.tilePitch !== 0) g.rotateOnWorldAxis(WORLD_RIGHT, DETAIL.tilePitch * grow);
+      if (DETAIL.tileRoll !== 0) g.rotateOnWorldAxis(WORLD_FWD, DETAIL.tileRoll * grow);
+    }
 
     // Base spill scale, plus the continuous centered pop, plus the open flourish.
     const base = (0.0001 + p) * (1 + centered * POP_SCALE);
-    g.scale.set(base * (1 + growX.current * OPEN_GROW), base * (1 + growY.current * OPEN_GROW), base);
+    g.scale.set(base * (1 + growX.current * DETAIL.grow), base * (1 + growY.current * DETAIL.grow), base);
     // The opening tile holds full color (it's becoming the video). Otherwise stay
     // B&W until the cascade has settled (`reveal`), then ease into color as it
     // nears center. Damped so it eases rather than popping.

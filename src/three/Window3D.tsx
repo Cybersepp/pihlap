@@ -2,12 +2,14 @@ import { ReactNode, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { Html } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
-import { GALLERY, TEXT_PANEL_CENTER } from './poses';
+import { GALLERY, TEXT_PANEL, textPanelCenter } from './poses';
+import { useTextPanelTuning } from './useTextPanelTuning';
 
 // Scratch vectors reused each frame (avoid per-frame allocations).
 const _normal = new THREE.Vector3();
 const _toCam = new THREE.Vector3();
 const _panelPos = new THREE.Vector3();
+const _center = new THREE.Vector3();
 const _quat = new THREE.Quaternion();
 
 // A window panel rendered in 3D at the gallery center, facing the gallery camera.
@@ -27,10 +29,14 @@ export function Window3D({ children, back }: { children: ReactNode; back: ReactN
   const group = useRef<THREE.Group>(null);
   const scale = useRef(0.001);
   const [showFront, setShowFront] = useState(true);
+  useTextPanelTuning();
 
   useFrame(({ camera }, dt) => {
     const g = group.current;
     if (!g) return;
+    // Position is recomputed every frame so dev-panel TEXT_PANEL edits slide the
+    // window live (the group's position prop is otherwise only applied at mount).
+    g.position.copy(textPanelCenter(_center));
     // Smooth ease toward full size (lambda ~9 → ~0.4s settle), OS-window feel.
     scale.current = THREE.MathUtils.damp(scale.current, 1, 9, dt);
     g.scale.setScalar(scale.current);
@@ -49,11 +55,11 @@ export function Window3D({ children, back }: { children: ReactNode; back: ReactN
   return (
     <group
       ref={group}
-      position={TEXT_PANEL_CENTER}
+      position={textPanelCenter(_center)}
       rotation={[0, GALLERY.faceY, 0]}
       scale={0.001}
     >
-      <Html transform scale={GALLERY.scale} zIndexRange={[40, 0]} occlude="blending">
+      <Html transform scale={TEXT_PANEL.scale} zIndexRange={[40, 0]} occlude="blending">
         {showFront ? children : back}
       </Html>
     </group>
