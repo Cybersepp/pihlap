@@ -21,6 +21,8 @@ export type Panel3DSpec =
       open: boolean;
       /** true while a video is open — the orbits halt cleanly, then resume. */
       paused: boolean;
+      /** true while the DOM video player is open — pauses the background preview loop. */
+      playerOpen: boolean;
       /** true in the detail state — the focused tile shows a 3D play button. */
       showPlay: boolean;
       onSelect: (work: Work, origin: IconClickOrigin, world: [number, number, number]) => void;
@@ -80,12 +82,13 @@ export function MartinScene({ target, isMobile, icons, panel, onSettle, orbitEna
                 wash, fading in with the gallery and out on close (panel.open ===
                 worksPhase 'open'). Mounted with the spiral, so it lives across
                 gallery → detail → video and unmounts on return to rest. */}
-            <CenterGlow active={panel.open} struck={!!galleryArrived} />
+            <CenterGlow active={panel.open} struck={!!galleryArrived} camDest={galleryCamPos} />
             <WorksSpiral3D
               works={panel.works}
               selectedWorkId={panel.selectedWorkId}
               open={panel.open}
               paused={panel.paused}
+              playerOpen={panel.playerOpen}
               showPlay={panel.showPlay}
               onSelect={panel.onSelect}
               onPlay={panel.onPlay}
@@ -94,7 +97,12 @@ export function MartinScene({ target, isMobile, icons, panel, onSettle, orbitEna
         )}
 
         {panel?.kind === 'text' && (
-          <TextPanel3D title={panel.title} content={panel.content} onClose={panel.onClose} />
+          <TextPanel3D
+            title={panel.title}
+            content={panel.content}
+            onClose={panel.onClose}
+            isMobile={isMobile}
+          />
         )}
 
         <CameraRig target={target} onSettle={onSettle} orbitEnabled={orbitEnabled} />

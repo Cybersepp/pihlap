@@ -30,6 +30,10 @@ const FLICKER_KEYS: [number, number][] = [
 ];
 const FLICKER_DUR = 0.62;
 
+// How close (world units) the camera must get to its gallery resting position
+// before the steady shaft snaps on — so it lights a beat before the swing settles.
+const STEADY_LEAD_DIST = 2.6;
+
 function flickerValue(t: number): number {
   let v = FLICKER_KEYS[0][1];
   for (let i = 0; i < FLICKER_KEYS.length; i++) {
@@ -101,13 +105,22 @@ const _yAxis = new THREE.Vector3();
 const _zAxis = new THREE.Vector3();
 const _xAxis = new THREE.Vector3();
 const _basis = new THREE.Matrix4();
+const _camDest = new THREE.Vector3();
 
 // The gallery's only light: a halo bleeding out from behind the centered tile,
 // plus two diagonal shafts angling onto it from the upper-left and upper-right.
 // `active` drives the fade — true (gallery open) eases the glow in; false eases it
 // out. Mounted by MartinScene only while the works panel is up, so it lives across
 // gallery → detail → video and clears on return to rest.
-export function CenterGlow({ active, struck }: { active: boolean; struck: boolean }) {
+export function CenterGlow({
+  active,
+  struck,
+  camDest,
+}: {
+  active: boolean;
+  struck: boolean;
+  camDest?: [number, number, number];
+}) {
   const halo = useRef<THREE.Mesh>(null);
   // [0] = left shaft (source up-left), [1] = right shaft (source up-right).
   const rays = useRef<(THREE.Mesh | null)[]>([null, null]);
@@ -171,9 +184,12 @@ export function CenterGlow({ active, struck }: { active: boolean; struck: boolea
     }
     const kFlicker = flickRef.current;
 
-    // Steady shaft holds off until the camera has reached the gallery, then snaps
-    // on abruptly (no fade-in); it still eases out on close.
-    const steadyOn = active && hasStruck.current;
+    // Steady shaft snaps on (no fade-in) a beat before the swing settles — the
+    // moment the camera comes within STEADY_LEAD_DIST of its gallery resting spot
+    // (or once arrived). It still eases out on close.
+    const nearDest =
+      !!camDest && state.camera.position.distanceTo(_camDest.set(...camDest)) < STEADY_LEAD_DIST;
+    const steadyOn = active && (hasStruck.current || nearDest);
     steadyRef.current = steadyOn ? 1 : THREE.MathUtils.damp(steadyRef.current, 0, FADE_RATE, d);
     const kSteady = steadyRef.current;
     const q = state.camera.quaternion;

@@ -11,6 +11,7 @@ import {
   notifyTextPanelChange,
 } from '../three/poses';
 import { applyPose } from '../three/liveCamera';
+import { getViewportSize } from '../lib/device';
 
 // A dev-only live tuning panel for the works ribbon. Every control mutates the
 // shared SPIRAL object in place; because WorksSpiral3D reads SPIRAL fresh every
@@ -91,7 +92,9 @@ const CAMERA_CONTROLS: Ctl[] = [
 // the last focused tile (no-op until a video has been opened once this session).
 const reapplyDetail = (): void => {
   const w = getLastDetailWorld();
-  if (w) applyPose(getDetailPoseFromWorld(w), FOCUS_SMOOTH_TIME);
+  if (!w) return;
+  const { width, height } = getViewportSize();
+  applyPose(getDetailPoseFromWorld(w, width, height), FOCUS_SMOOTH_TIME);
 };
 
 const detail = (key: keyof typeof DETAIL, min: number, max: number, step: number, label: string): Ctl => ({
@@ -122,9 +125,9 @@ const detailLive = (key: keyof typeof DETAIL, min: number, max: number, step: nu
 const DETAIL_CONTROLS: Ctl[] = [
   detailLive('offsetX', -5, 5, 0.05, 'tileX (left/right)'),
   detailLive('offsetY', -4, 4, 0.05, 'tileY (up/down)'),
-  detail('pan', -5, 5, 0.05, 'pan cam (left/right)'),
-  detail('panY', -4, 4, 0.05, 'pan cam (up/down)'),
-  detail('distance', 1, 12, 0.1, 'distance (zoom)'),
+  detail('pan', -4, 4, 0.05, 'pan nudge (left/right)'),
+  detail('panY', -4, 4, 0.05, 'panY nudge (up/down)'),
+  detail('distance', -5, 5, 0.1, 'distance nudge'),
   detailLive('grow', 0, 3, 0.05, 'grow (tile size)'),
   detailLive('forward', 0, 2, 0.05, 'forward (toward cam)'),
   detailLive('bow', 0, 2.5, 0.05, 'bow (tile arch)'),

@@ -7,15 +7,17 @@ export interface TextPanel3DProps {
   title: string;
   content: ReactNode;
   onClose: () => void;
+  isMobile: boolean;
 }
 
 // A TextEdit-style window (contact.txt / readme.txt) rendered as a 3D panel in the
 // gallery center, exactly like the Finder — so opening it swings the camera behind
 // Martin and the window scales open in the middle.
-export function TextPanel3D({ title, content, onClose }: TextPanel3DProps) {
+export function TextPanel3D({ title, content, onClose, isMobile }: TextPanel3DProps) {
   useTextPanelTuning();
   return (
     <Window3D
+      isMobile={isMobile}
       // Blank "paper" shown when the camera is behind the panel — same footprint
       // as the window so the 3D plane keeps its size through the flip.
       back={

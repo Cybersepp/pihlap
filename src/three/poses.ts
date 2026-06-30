@@ -441,16 +441,17 @@ export function ribbonUp(phase: number, out: THREE.Vector3): THREE.Vector3 {
 // it fresh on every re-issue, and WorksSpiral3D reads the tile-flourish fields
 // (tileYaw/grow/forward) every frame. Tune live, then `copy` to paste back here.
 export const DETAIL = {
-  /** How far in front of a clicked file the camera sits. Larger = camera stays
-   *  back (tile reads smaller, more parallax); the tile's own expand does the
-   *  "coming forward". */
-  distance: 5.5,
-  /** Screen-right pan of the whole view so the tile sits left-of-centre, leaving
-   *  room for the info panel. Negative = left (the gallery camera views from -Z,
-   *  so its screen-right is world -X); flip the sign to put it on the right. */
-  pan: -1.55,
-  /** Vertical pan of the view (world +Y up). Slides the tile up/down on screen. */
-  panY: 0.45,
+  /** Manual NUDGE (world units) added to the responsive camera distance derived by
+   *  detailLayout() from the viewport. 0 = pure auto-fit; positive backs the camera
+   *  off, negative moves it in. The base distance now adapts to the screen. */
+  distance: 0,
+  /** Manual NUDGE along the camera's screen-right axis, added on top of the
+   *  responsive seating from detailLayout(). Negative = left. Leave 0 to trust the
+   *  auto layout; use it to fine-tune the framing. */
+  pan: 0,
+  /** Manual NUDGE along the camera's screen-up axis, added on top of the responsive
+   *  seating. Positive = up. Leave 0 to trust the auto layout. */
+  panY: 0,
   /** Radians the opening tile yaws to the right as it expands. Shared with the
    *  tile flourish AND the camera reframe (via yawFollow). Flip to turn the other
    *  way. */
@@ -480,37 +481,162 @@ export const DETAIL = {
   bow: 0,
 };
 
-// The last tile world position the detail pose was framed from. Remembered so the
-// dev panel can re-issue the detail pose live when a DETAIL slider moves (the
-// pose is otherwise only computed at click-time, unlike the per-frame SPIRAL).
+// ── Responsive detail-view layout ─────────────────────────────────────────────
+// The open-video composition adapts to the LIVE viewport instead of per-device
+// constants (mirrors the frustum-derived icon column). Wide screens seat the tile
+// left with the info panel on the right; tall/portrait screens stack the tile up
+// with the panel docked along the bottom. The camera distance is solved from the
+// FOV so the tile fills a sensible fraction of its region at any aspect — so it
+// scales to phones we can't test, not just a few hardcoded breakpoints. The
+// fractions below are the only tunables; everything else is derived. Keep
+// `portraitAspect` in sync with the .detail-panel CSS `max-aspect-ratio` breakpoint.
+export const DETAIL_LAYOUT = {
+  /** aspect (w/h) at or below which the panel docks at the bottom (stacked layout). */
+  portraitAspect: 0.95,
+  /** Landscape: fraction of viewport WIDTH reserved for the tile (rest = panel). */
+  landscapeTileWidth: 0.6,
+  /** Landscape: fraction of its region the tile fills (smaller ⇒ camera further back). */
+  landscapeFill: 0.7,
+  /** Portrait: fraction of viewport HEIGHT reserved for the tile (rest = panel). */
+  portraitTileHeight: 0.56,
+  /** Portrait: fraction of its region the tile fills. */
+  portraitFill: 0.9,
+  /** Clamp so an extreme viewport never parks the camera absurdly near/far. */
+  minDistance: 3,
+  maxDistance: 10,
+};
+
+const _TAN_HALF_FOV = Math.tan((SCENE_FOV * Math.PI) / 360);
+function clampNum(v: number, lo: number, hi: number): number {
+  return v < lo ? lo : v > hi ? hi : v;
+}
+
+export interface DetailLayout {
+  /** Auto-fit camera distance in front of the tile (before DETAIL.distance nudge). */
+  distance: number;
+  /** Camera pan along its screen-right axis (world units) to seat the tile. */
+  panRight: number;
+  /** Camera pan along its screen-up axis (world units) to seat the tile. */
+  panUp: number;
+  /** Info panel docks at the bottom (portrait) rather than to the side. */
+  panelBottom: boolean;
+}
+
+// Solve the detail framing for the current viewport. Pure function of width/height
+// (and the live DETAIL.grow / DETAIL_LAYOUT tunables), so it re-derives on resize
+// and orientation change.
+export function detailLayout(width: number, height: number): DetailLayout {
+  const aspect = width / height || 1;
+  const L = DETAIL_LAYOUT;
+  const grow = 1 + DETAIL.grow;
+  const tileW = SPIRAL.tile[0] * grow;
+  const tileH = SPIRAL.tile[1] * grow;
+  const portrait = aspect <= L.portraitAspect;
+
+  if (!portrait) {
+    const region = L.landscapeTileWidth;
+    // Distance that fits the tile in its left region by WIDTH and by full HEIGHT;
+    // take the larger so it fits both.
+    const dW = tileW / (L.landscapeFill * region * 2 * _TAN_HALF_FOV * aspect);
+    const dH = tileH / (L.landscapeFill * 2 * _TAN_HALF_FOV);
+    const distance = clampNum(Math.max(dW, dH), L.minDistance, L.maxDistance);
+    const halfW = distance * _TAN_HALF_FOV * aspect;
+    // Centre of the left region as a screen-x fraction from centre (negative = left).
+    const seat = region / 2 - 0.5;
+    // Pan the camera the opposite way so the tile appears at that seat.
+    return { distance, panRight: -seat * halfW, panUp: 0, panelBottom: false };
+  }
+
+  const region = L.portraitTileHeight;
+  const dH = tileH / (L.portraitFill * region * 2 * _TAN_HALF_FOV);
+  const dW = tileW / (L.portraitFill * 2 * _TAN_HALF_FOV * aspect);
+  const distance = clampNum(Math.max(dH, dW), L.minDistance, L.maxDistance);
+  const halfH = distance * _TAN_HALF_FOV;
+  // Centre of the top region as a screen-y fraction from centre (positive = up).
+  const seat = 0.5 - region / 2;
+  return { distance, panRight: 0, panUp: -seat * halfH, panelBottom: true };
+}
+
+// The last tile world position + viewport the detail pose was framed from.
+// Remembered so the dev panel can re-issue the detail pose live when a DETAIL
+// slider moves (the pose is otherwise only computed at click-time).
 let _lastDetailWorld: [number, number, number] | null = null;
+let _lastDetailViewport: [number, number] = [1, 1];
 export function getLastDetailWorld(): [number, number, number] | null {
   return _lastDetailWorld;
 }
+export function getLastDetailViewport(): [number, number] {
+  return _lastDetailViewport;
+}
 
 // Convert a point on the window panel (its measured world position) into a camera
-// pose that frames it head-on, sitting DETAIL.distance in front along the panel's
-// facing normal. Used to fly the camera to the clicked file.
-export function getFocusPoseFromWorld(world: [number, number, number]): PoseSpec {
+// pose that frames it head-on, sitting the auto-fit distance (+ DETAIL.distance
+// nudge) in front along the panel's facing normal. Used to fly to the clicked file.
+export function getFocusPoseFromWorld(
+  world: [number, number, number],
+  width: number,
+  height: number,
+): PoseSpec {
   // Swing the camera partway around the tile in the same direction it yaws, so the
   // reframe respects the turn rather than fighting it (a = faceY + followed yaw).
   const a = GALLERY.faceY + DETAIL.tileYaw * DETAIL.yawFollow;
+  const d = detailLayout(width, height).distance + DETAIL.distance;
   const nx = Math.sin(a);
   const nz = Math.cos(a);
   return {
-    position: [world[0] + nx * DETAIL.distance, world[1], world[2] + nz * DETAIL.distance],
-    target: world,
+    position: [world[0] + nx * d, world[1], world[2] + nz * d],
+    target: [world[0], world[1], world[2]],
   };
 }
 
-// Detail pose: the focus pose, panned sideways + vertically so the tile reads
-// left-of-centre. Panning camera AND target by the same vector is a pure pan
-// (perspective intact).
-export function getDetailPoseFromWorld(world: [number, number, number]): PoseSpec {
+// Detail pose: the focus pose, panned along the camera's screen axes so the tile
+// seats into the region the responsive layout reserves for it (left on wide
+// screens, up on tall/portrait ones), plus any manual DETAIL.pan/panY nudge.
+// Panning camera AND target by the same vector is a pure pan (perspective intact).
+// The camera looks horizontally, so screen-right = (cos a, 0, -sin a) and
+// screen-up = world up — no roll to account for.
+export function getDetailPoseFromWorld(
+  world: [number, number, number],
+  width: number,
+  height: number,
+): PoseSpec {
   _lastDetailWorld = world;
-  const f = getFocusPoseFromWorld(world);
+  _lastDetailViewport = [width, height];
+  const a = GALLERY.faceY + DETAIL.tileYaw * DETAIL.yawFollow;
+  const layout = detailLayout(width, height);
+  const f = getFocusPoseFromWorld(world, width, height);
+  const right = layout.panRight + DETAIL.pan;
+  const up = layout.panUp + DETAIL.panY;
+  const rx = Math.cos(a) * right;
+  const rz = -Math.sin(a) * right;
   return {
-    position: [f.position[0] + DETAIL.pan, f.position[1] + DETAIL.panY, f.position[2]],
-    target: [f.target[0] + DETAIL.pan, f.target[1] + DETAIL.panY, f.target[2]],
+    position: [f.position[0] + rx, f.position[1] + up, f.position[2] + rz],
+    target: [f.target[0] + rx, f.target[1] + up, f.target[2] + rz],
   };
+}
+
+// ── Responsive 3D text panel (contact.txt / readme.txt) ───────────────────────
+// The text window is an <Html transform> sheet: its on-screen world width is
+// width × scale / 40, then projected by the gallery camera. On big screens we cap
+// the scale at TEXT_PANEL.scale (the tuned look); on small/portrait viewports we
+// shrink the scale so the panel always fits within ~86% width / ~82% height of the
+// frame instead of overflowing. Derived from the actual gallery camera distance,
+// so it adapts continuously to any screen.
+const _tpCenter = new THREE.Vector3();
+export interface TextPanelLayout {
+  width: number;
+  height: number;
+  scale: number;
+}
+export function textPanelLayout(width: number, height: number, isMobile: boolean): TextPanelLayout {
+  const aspect = width / height || 1;
+  const cam = (isMobile ? POSES_MOBILE : POSES).gallery.position;
+  const pc = textPanelCenter(_tpCenter);
+  const dist = Math.hypot(cam[0] - pc.x, cam[1] - pc.y, cam[2] - pc.z) || 1;
+  const halfH = dist * _TAN_HALF_FOV;
+  const halfW = halfH * aspect;
+  const scaleForW = (0.86 * 2 * halfW * 40) / TEXT_PANEL.width;
+  const scaleForH = (0.82 * 2 * halfH * 40) / TEXT_PANEL.height;
+  const scale = Math.min(TEXT_PANEL.scale, scaleForW, scaleForH);
+  return { width: TEXT_PANEL.width, height: TEXT_PANEL.height, scale };
 }

@@ -21,7 +21,8 @@ import { readMeText } from './data/content';
 import { ContactCard } from './components/ContactCard';
 import { RibbonControls, TextWindowControls } from './components/RibbonControls';
 import { SignatureIntro } from './components/SignatureIntro';
-import { shouldUseMobileLayout } from './lib/device';
+import { getViewportSize, shouldUseMobileLayout } from './lib/device';
+import { applyPose } from './three/liveCamera';
 
 // The 3D layer pulls in three.js + drei (~900KB). Code-split it so the desktop
 // DOM paints instantly and the WebGL bundle streams in as its own chunk.
@@ -56,6 +57,9 @@ export default function App() {
   const [worksPhase, setWorksPhase] = useState<'open' | 'closing' | 'closed'>('closed');
   // Initialised synchronously so the desktop-only intro never flashes on a phone.
   const [isMobile, setIsMobile] = useState(() => shouldUseMobileLayout());
+  // Live viewport size, so the detail framing re-derives on resize / orientation
+  // change (the camera pose is computed from the aspect — see getDetailPoseFromWorld).
+  const [viewport, setViewport] = useState(() => getViewportSize());
   // Flips true once the 3D figure's GLB has resolved — hands off from the intro draw.
   const [modelReady, setModelReady] = useState(false);
   // Keys the intro so it remounts and redraws from scratch each return to rest.
@@ -74,6 +78,7 @@ export default function App() {
   useEffect(() => {
     const check = () => {
       setIsMobile(shouldUseMobileLayout());
+      setViewport(getViewportSize());
     };
     check();
     window.addEventListener('resize', check);
@@ -170,6 +175,17 @@ export default function App() {
     return () => window.clearTimeout(t);
   }, [worksPhase]);
 
+  // Re-frame the detail/video pose when the viewport changes (resize / phone
+  // rotation). The camera key is fixed per work, so CameraRig won't re-issue on its
+  // own — push the freshly-derived pose straight through the live-camera bridge.
+  useEffect(() => {
+    if (windowState.type !== 'detail' && windowState.type !== 'quicktime') return;
+    applyPose(
+      getDetailPoseFromWorld(focusWorld, viewport.width, viewport.height),
+      FOCUS_SMOOTH_TIME,
+    );
+  }, [viewport.width, viewport.height, windowState.type, focusWorld]);
+
   const selectedWorkId =
     windowState.type === 'quicktime' || windowState.type === 'detail'
       ? windowState.work.id
@@ -190,6 +206,7 @@ export default function App() {
       selectedWorkId,
       open: worksPhase === 'open',
       paused: workOpen,
+      playerOpen: windowState.type === 'quicktime',
       showPlay: windowState.type === 'detail',
       onSelect: openWorkFromFinder,
       onPlay: playSelected,
@@ -223,7 +240,7 @@ export default function App() {
     // doesn't move the camera — the player just fades in over the framed tile.
     cameraTarget = {
       key: focusKeyFor(windowState.work.id),
-      spec: getDetailPoseFromWorld(focusWorld),
+      spec: getDetailPoseFromWorld(focusWorld, viewport.width, viewport.height),
       smoothTime: FOCUS_SMOOTH_TIME,
     };
   } else if (windowState.type === 'none') {

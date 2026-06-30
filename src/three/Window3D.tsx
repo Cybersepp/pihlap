@@ -1,8 +1,8 @@
 import { ReactNode, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { Html } from '@react-three/drei';
-import { useFrame } from '@react-three/fiber';
-import { GALLERY, TEXT_PANEL, textPanelCenter } from './poses';
+import { useFrame, useThree } from '@react-three/fiber';
+import { GALLERY, textPanelCenter, textPanelLayout } from './poses';
 import { useTextPanelTuning } from './useTextPanelTuning';
 
 // Scratch vectors reused each frame (avoid per-frame allocations).
@@ -25,11 +25,23 @@ const _quat = new THREE.Quaternion();
 // camera is on and render either the real window (`children`) or a blank `back`
 // sheet. The back is featureless, so the sheet reading mirrored doesn't matter —
 // and the text is simply not in the DOM when you're behind it.
-export function Window3D({ children, back }: { children: ReactNode; back: ReactNode }) {
+export function Window3D({
+  children,
+  back,
+  isMobile,
+}: {
+  children: ReactNode;
+  back: ReactNode;
+  isMobile: boolean;
+}) {
   const group = useRef<THREE.Group>(null);
   const scale = useRef(0.001);
   const [showFront, setShowFront] = useState(true);
   useTextPanelTuning();
+  // Viewport-aware Html scale so the window never overflows a narrow phone. Reads
+  // s.size, so it re-derives on resize (TEXT_PANEL.scale caps it on big screens).
+  const size = useThree((s) => s.size);
+  const { scale: htmlScale } = textPanelLayout(size.width, size.height, isMobile);
 
   useFrame(({ camera }, dt) => {
     const g = group.current;
@@ -59,7 +71,7 @@ export function Window3D({ children, back }: { children: ReactNode; back: ReactN
       rotation={[0, GALLERY.faceY, 0]}
       scale={0.001}
     >
-      <Html transform scale={TEXT_PANEL.scale} zIndexRange={[40, 0]} occlude="blending">
+      <Html transform scale={htmlScale} zIndexRange={[40, 0]} occlude="blending">
         {showFront ? children : back}
       </Html>
     </group>

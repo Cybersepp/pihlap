@@ -144,12 +144,33 @@ export function SignatureIntro({ modelReady, dismissed }: { modelReady: boolean;
 
   const useMask = !!data && data.filled.length > 0;
 
+  // The name finished drawing but the figure's still streaming in — let it
+  // smolder (warm glow + breathing opacity) as a quiet "loading" tell.
+  const waiting = drawComplete && !modelReady && !dismissed && !prefersReducedMotion;
+
   return (
     <motion.div
       className="signature-intro"
       aria-hidden="true"
-      animate={{ opacity: settled ? BACKDROP_OPACITY : 1 }}
-      transition={{ duration: 0.9, ease: 'easeInOut' }}
+      animate={
+        settled
+          ? { opacity: BACKDROP_OPACITY, filter: 'drop-shadow(0 0 0px rgba(255,140,60,0))' }
+          : waiting
+            ? {
+                opacity: [1, 0.62, 1],
+                filter: [
+                  'drop-shadow(0 0 2px rgba(255,150,60,0.15))',
+                  'drop-shadow(0 0 16px rgba(255,120,40,0.5))',
+                  'drop-shadow(0 0 2px rgba(255,150,60,0.15))',
+                ],
+              }
+            : { opacity: 1, filter: 'drop-shadow(0 0 0px rgba(255,140,60,0))' }
+      }
+      transition={
+        waiting
+          ? { duration: 1.7, ease: 'easeInOut', repeat: Infinity }
+          : { duration: 0.9, ease: 'easeInOut' }
+      }
     >
       {data && (
         <svg viewBox={data.viewBox} className="signature-intro__svg" xmlns="http://www.w3.org/2000/svg">

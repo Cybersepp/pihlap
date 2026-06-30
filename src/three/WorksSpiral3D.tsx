@@ -26,6 +26,8 @@ export interface WorksSpiral3DProps {
   open: boolean;
   /** true while a video is open — input is ignored and tiles drop out of focus. */
   paused: boolean;
+  /** true while the DOM video player is open — pause the background preview loop. */
+  playerOpen: boolean;
   /** true in the detail state — the focused tile shows a 3D play button. */
   showPlay: boolean;
   onSelect: (work: Work, origin: IconClickOrigin, world: [number, number, number]) => void;
@@ -514,7 +516,7 @@ function SpiralItem({
 // The works gallery as an endless upward helix around Martin. Scroll/drag winds it
 // and snaps the nearest work to front-and-center, where it reveals into color with
 // a scrambling title. Clicking the centered tile opens the existing video player.
-export function WorksSpiral3D({ works, open, paused, showPlay, onSelect, onPlay }: WorksSpiral3DProps) {
+export function WorksSpiral3D({ works, open, paused, playerOpen, showPlay, onSelect, onPlay }: WorksSpiral3DProps) {
   const size = useThree((s) => s.size);
   const camera = useThree((s) => s.camera);
   const raycaster = useThree((s) => s.raycaster);
@@ -553,6 +555,14 @@ export function WorksSpiral3D({ works, open, paused, showPlay, onSelect, onPlay 
   useEffect(() => {
     if (!open) video.pause();
   }, [open, video]);
+  // The DOM player owns playback while it's up; pause the background preview loop
+  // so it isn't decoding (and audibly/visually doubling) behind the QuickTime
+  // window, then resume it when the player closes back to the detail tile.
+  useEffect(() => {
+    if (!open) return;
+    if (playerOpen) video.pause();
+    else if (video.src) video.play().catch(() => {});
+  }, [playerOpen, open, video]);
   useEffect(
     () => () => {
       video.pause();
@@ -610,6 +620,11 @@ export function WorksSpiral3D({ works, open, paused, showPlay, onSelect, onPlay 
   // only once it's actually ready so a tile never flashes the wrong (or unloaded)
   // clip. Reset whenever focus moves; re-armed by the swap effect below.
   const [liveWorkId, setLiveWorkId] = useState<string | undefined>(undefined);
+  // The work whose loop is currently loaded in the shared <video> element. Tracked
+  // in a ref (not state) so the swap effect can skip reloading a tile that's already
+  // playing — e.g. clicking into detail on the live tile keeps it playing instead
+  // of flashing back to its poster.
+  const loadedWorkId = useRef<string | undefined>(undefined);
   // Tile meshes registered by index, for raycasting a click to the centered tile.
   const tilesRef = useRef<(THREE.Mesh | null)[]>([]);
   // onSelect is recreated each App render; keep it in a ref so the input effect
@@ -645,14 +660,25 @@ export function WorksSpiral3D({ works, open, paused, showPlay, onSelect, onPlay 
   // after focus holds briefly, so winding the helix doesn't thrash the src. The
   // debounce resets on every focus change; the tile stays on its poster until the
   // clip is `playing`, then liveWorkId arms it. Sourceless works (404) fall back to
-  // the Kai Angel placeholder. Disabled while a video is open (paused).
+  // the Kai Angel placeholder.
+  //
+  // Kept running in the detail state (paused) so the focused tile — which expands
+  // INTO the video — actually starts its loop even when the user clicks before the
+  // gallery preview had a chance to go live. Only the open DOM player (playerOpen)
+  // halts it; that's handled by the pause/resume effect above.
   useEffect(() => {
-    if (!open || paused) return;
+    if (!open || playerOpen) return;
     const work = works[focusedIndex];
     if (!work) return;
+    // Already loaded & playing this work — leave it be (no poster flash on click-in).
+    if (loadedWorkId.current === work.id && !video.paused) return;
     setLiveWorkId(undefined);
+    loadedWorkId.current = undefined;
     const handle = window.setTimeout(() => {
-      const onPlaying = () => setLiveWorkId(work.id);
+      const onPlaying = () => {
+        loadedWorkId.current = work.id;
+        setLiveWorkId(work.id);
+      };
       const onError = () => {
         if (!video.src.endsWith('kai-angel-prada-party.mp4')) {
           video.src = PLACEHOLDER_LOOP;
@@ -671,7 +697,7 @@ export function WorksSpiral3D({ works, open, paused, showPlay, onSelect, onPlay 
       video.onplaying = null;
       video.onerror = null;
     };
-  }, [focusedIndex, open, paused, works, video]);
+  }, [focusedIndex, open, playerOpen, works, video]);
 
   // Input → sTarget. Active only while the gallery is open and no video is up
   // (the camera rig's wheel/touch are disabled in this state, so we own them).

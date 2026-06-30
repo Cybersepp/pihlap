@@ -153,6 +153,21 @@ button { font: inherit; color: inherit; }
   color: rgba(253, 250, 244, 0.7);
 }
 
+/* Narrow / portrait phones: the tile is viewed from further back and reads smaller,
+   so scale the overlapping title down to match it. */
+@media (max-aspect-ratio: 19 / 20) {
+  .spiral-title {
+    width: 260px;
+    margin-left: -130px;
+  }
+  .spiral-title-main {
+    font-size: 19px;
+  }
+  .spiral-title-sub {
+    font-size: 13px;
+  }
+}
+
 /* Detail view: DOM chrome over the WebGL scene when a work is selected. The
    container is click-through; only the play button and panel opt back in. Sits
    below the video player (z 100) so playback covers it. */
@@ -191,6 +206,10 @@ button { font: inherit; color: inherit; }
   top: 12vh;
   transform: none;
   width: min(34vw, 420px);
+  /* Cap the height so a long description scrolls instead of running off-screen on
+     short/landscape viewports. */
+  max-height: 76vh;
+  overflow-y: auto;
   pointer-events: auto;
   color: #fdfaf4;
   text-shadow: 0 2px 18px rgba(0, 0, 0, 0.6);
@@ -262,14 +281,19 @@ button { font: inherit; color: inherit; }
   color: #fff;
   border-color: #fff;
 }
-@media (max-width: 768px) {
+/* Portrait / tall viewports: the 3D framing stacks the tile UP (see detailLayout's
+   portrait branch), so dock the info panel along the bottom instead of the side.
+   Keyed on aspect-ratio — not device width — to stay in lockstep with
+   DETAIL_LAYOUT.portraitAspect (0.95 = 19/20) so JS framing and CSS chrome agree. */
+@media (max-aspect-ratio: 19 / 20) {
   .detail-panel {
-    right: 5vw;
-    left: 5vw;
+    right: 4vw;
+    left: 4vw;
     width: auto;
     top: auto;
-    bottom: 6vh;
+    bottom: 4vh;
     transform: none;
+    max-height: 42vh;
   }
 }
 
