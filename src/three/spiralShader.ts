@@ -6,6 +6,12 @@ import * as THREE from 'three';
 // (so the focused tile "pixelates into color" and back out). `uOpacity` fades tiles
 // toward the off-screen wrap so the recycle is invisible.
 //
+// Edge cutoff: the ribbon is clipped to a visible window centered on the focus.
+// Each fragment's position ALONG the ribbon (uPhase ± its share of uSpan) is tested
+// against ±uCut, with a narrow uBand feather — so a tile crossing the cutoff wipes
+// edge-first into full transparency at a fixed ribbon position on both sides, well
+// before it reaches the screen corners.
+//
 // `uTex` starts as a B&W-ready poster / placeholder; the focused tile later swaps
 // in a live VideoTexture (same uniform) once the real loop mp4s exist.
 export function makeTileMaterial(map: THREE.Texture): THREE.ShaderMaterial {
@@ -17,6 +23,10 @@ export function makeTileMaterial(map: THREE.Texture): THREE.ShaderMaterial {
       uFocus: { value: 0 },
       uOpacity: { value: 1 },
       uDim: { value: 1 }, // 1 = full brightness, < 1 darkens (spotlight other tiles)
+      uPhase: { value: 0 }, // this tile's signed distance from center (ribbon steps)
+      uSpan: { value: 1 }, // this tile's phase-width along the ribbon (SPIRAL.fill)
+      uCut: { value: 100 }, // |position| beyond which the ribbon is transparent
+      uBand: { value: 0.2 }, // width of the narrow fade at the cutoff
     },
     vertexShader: /* glsl */ `
       varying vec2 vUv;
@@ -30,6 +40,10 @@ export function makeTileMaterial(map: THREE.Texture): THREE.ShaderMaterial {
       uniform float uFocus;
       uniform float uOpacity;
       uniform float uDim;
+      uniform float uPhase;
+      uniform float uSpan;
+      uniform float uCut;
+      uniform float uBand;
       varying vec2 vUv;
 
       void main() {
@@ -43,7 +57,59 @@ export function makeTileMaterial(map: THREE.Texture): THREE.ShaderMaterial {
         float g = dot(tex.rgb, vec3(0.299, 0.587, 0.114));
         vec3 col = mix(vec3(g), tex.rgb, uFocus);
 
-        gl_FragColor = vec4(col * uDim, tex.a * uOpacity);
+        // Position of THIS fragment along the ribbon (in steps from center): the
+        // tile spans uPhase ± 0.5·uSpan; vUv.x maps left→right across that span.
+        float pos = uPhase - (vUv.x - 0.5) * uSpan;
+        // Visible window |pos| ≤ uCut with a narrow feather, so the ribbon wipes
+        // edge-first into full transparency at a fixed position on both sides.
+        float vis = 1.0 - smoothstep(uCut - uBand, uCut, abs(pos));
+
+        gl_FragColor = vec4(col * uDim, tex.a * uOpacity * vis);
+      }
+    `,
+  });
+}
+
+// Material for a tile's bezel (thickness shell). It carries no texture — a flat
+// grey edge — but shares the front face's per-fragment along-ribbon CUTOFF so the
+// shell wipes into transparency at the same position; otherwise the grey back of
+// the tile peeks past the clipped video around the cutoff. `aVx` is each vertex's
+// width coordinate (−0.5..0.5), baked by makeConformGeoms in the bezel's vertex
+// order, from which the shader recovers the fragment's ribbon position like the
+// front face does from vUv.x.
+export function makeBezelMaterial(): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    uniforms: {
+      uColor: { value: new THREE.Color() },
+      uOpacity: { value: 0 },
+      uPhase: { value: 0 },
+      uSpan: { value: 1 },
+      uCut: { value: 100 },
+      uBand: { value: 0.2 },
+    },
+    vertexShader: /* glsl */ `
+      attribute float aVx;
+      varying float vVx;
+      void main() {
+        vVx = aVx;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform vec3 uColor;
+      uniform float uOpacity;
+      uniform float uPhase;
+      uniform float uSpan;
+      uniform float uCut;
+      uniform float uBand;
+      varying float vVx;
+      void main() {
+        float pos = uPhase - vVx * uSpan;
+        float vis = 1.0 - smoothstep(uCut - uBand, uCut, abs(pos));
+        gl_FragColor = vec4(uColor, uOpacity * vis);
       }
     `,
   });

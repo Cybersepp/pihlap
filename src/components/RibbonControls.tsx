@@ -3,6 +3,7 @@ import {
   POSES,
   SPIRAL,
   DETAIL,
+  GLOW,
   TEXT_PANEL,
   FOCUS_SMOOTH_TIME,
   getLastDetailWorld,
@@ -49,6 +50,8 @@ const CONTROLS: Ctl[] = [
   num('bezel', 0, 1, 0.01, 'bezel (edge grey)'),
   num('fadeStart', 0, 12, 0.5, 'fadeStart'),
   num('fadeEnd', 1, 14, 0.5, 'fadeEnd'),
+  num('cutoff', 0.3, 6, 0.05, 'cutoff (window)'),
+  num('cutoffFade', 0.02, 1, 0.01, 'cutoffFade (feather)'),
   num('focusRange', 0.1, 2, 0.05, 'focusRange'),
   {
     label: 'tileHeight',
@@ -129,6 +132,28 @@ const DETAIL_CONTROLS: Ctl[] = [
   detailLive('tilePitch', -1.2, 1.2, 0.02, 'tilePitch (tip)'),
   detailLive('tileRoll', -1.2, 1.2, 0.02, 'tileRoll (spin)'),
   detail('yawFollow', 0, 1, 0.02, 'yawFollow'),
+];
+
+// Gallery glow (halo behind centered tile + overhead wash). Every field is read
+// fresh each frame by CenterGlow, so plain mutation applies live.
+const glow = (key: keyof typeof GLOW, min: number, max: number, step: number, label: string): Ctl => ({
+  label,
+  min,
+  max,
+  step,
+  get: () => GLOW[key] as number,
+  set: (v) => {
+    (GLOW as Record<string, unknown>)[key] = v;
+  },
+});
+
+const GLOW_CONTROLS: Ctl[] = [
+  glow('haloOpacity', 0, 1.5, 0.01, 'haloOpacity'),
+  glow('haloSize', 1, 12, 0.1, 'haloSize'),
+  glow('rayOpacity', 0, 1.5, 0.01, 'rayOpacity'),
+  glow('rayLength', 1, 12, 0.1, 'rayLength'),
+  glow('rayWidth', 0.3, 5, 0.05, 'rayWidth'),
+  glow('rayAngle', 0, 1.4, 0.02, 'rayAngle'),
 ];
 
 // World position the ribbon arches around. Decoupled from the camera target, so
@@ -256,12 +281,14 @@ export function RibbonControls() {
     const pos = RIBBON_POS_CONTROLS.map((c) => round(c.get()));
     const rot = RIBBON_ROT_CONTROLS.map((c) => round(c.get()));
     const det = DETAIL_CONTROLS.map((c) => `  ${c.label.split(' ')[0]}: ${round(c.get())},`);
+    const glw = GLOW_CONTROLS.map((c) => `  ${c.label.split(' ')[0]}: ${round(c.get())},`);
     const text =
       `// tuned ribbon values\n${lines.join('\n')}\n` +
       `// SPIRAL.center\n[${pos.join(', ')}]\n` +
       `// SPIRAL.rotation\n[${rot.join(', ')}]\n` +
       `// POSES.gallery.position\n[${cam.join(', ')}]\n` +
-      `// DETAIL\n${det.join('\n')}`;
+      `// DETAIL\n${det.join('\n')}\n` +
+      `// GLOW\n${glw.join('\n')}`;
     navigator.clipboard?.writeText(text).then(
       () => {
         setCopied(true);
@@ -306,6 +333,10 @@ export function RibbonControls() {
           ))}
           <div style={section}>detail (open video)</div>
           {DETAIL_CONTROLS.map((c) => (
+            <Slider key={c.label} ctl={c} onChange={force} />
+          ))}
+          <div style={section}>glow (gallery)</div>
+          {GLOW_CONTROLS.map((c) => (
             <Slider key={c.label} ctl={c} onChange={force} />
           ))}
         </div>

@@ -229,8 +229,11 @@ export default function App() {
   } else if (windowState.type === 'none') {
     cameraTarget = { key: 'rest', spec: poseSet.rest };
   } else {
-    // finder / contact / readme all swing behind Martin to the gallery view.
-    cameraTarget = { key: 'gallery', spec: poseSet.gallery };
+    // finder / contact / readme all share the gallery pose, but keep DISTINCT keys
+    // so switching between these tabs re-issues setLookAt — easing the camera back
+    // to the canonical gallery framing and discarding any orbit done in the
+    // previous tab (e.g. orbiting readme, then opening selected works).
+    cameraTarget = { key: `gallery:${windowState.type}`, spec: poseSet.gallery };
   }
 
   // "Broken": the camera has left rest (any window open), so the cloudy desktop
@@ -316,6 +319,8 @@ export default function App() {
           icons={sceneIcons}
           panel={panel}
           onSettle={setSettledKey}
+          galleryArrived={settledKey === 'gallery:finder'}
+          galleryCamPos={poseSet.gallery.position}
           onModelReady={() => setModelReady(true)}
           // The spiral gallery owns wheel/touch (scroll winds the helix) and the
           // detail/video share a fixed framing, so orbit stays off there. The

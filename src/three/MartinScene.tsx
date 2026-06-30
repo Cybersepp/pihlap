@@ -4,6 +4,7 @@ import { Martin } from './Martin';
 import { CameraRig } from './CameraRig';
 import { DesktopIcons3D, SceneIcon } from './DesktopIcons3D';
 import { WorksSpiral3D } from './WorksSpiral3D';
+import { CenterGlow } from './CenterGlow';
 import { TextPanel3D } from './TextPanel3D';
 import { CameraTarget, SCENE_FOV } from './poses';
 import { MaterialSettings } from './materialSettings';
@@ -36,6 +37,10 @@ interface MartinSceneProps {
   onSettle?: (key: string | null) => void;
   /** User may orbit around the gallery panel (after the swing settles). */
   orbitEnabled?: boolean;
+  /** Camera has settled into the gallery — cues the brittle light's strike. */
+  galleryArrived?: boolean;
+  /** The gallery's resting camera position — the steady light snaps on as the swing nears it. */
+  galleryCamPos?: [number, number, number];
   /** A work detail/video is open — sink the figure into the background. */
   dimmed?: boolean;
   /** Live material settings from the dev panel (defaults applied in production). */
@@ -49,7 +54,7 @@ interface MartinSceneProps {
 // the Martin figure + lighting + the camera rig, plus the world-anchored desktop icons
 // and (while a window is open) a 3D window panel floating in the gallery center.
 // Lighting is a simple three-point rig (no HDRI / network dependency).
-export function MartinScene({ target, isMobile, icons, panel, onSettle, orbitEnabled, dimmed, materialSettings, onModelReady }: MartinSceneProps) {
+export function MartinScene({ target, isMobile, icons, panel, onSettle, orbitEnabled, galleryArrived, galleryCamPos, dimmed, materialSettings, onModelReady }: MartinSceneProps) {
   return (
     <div className="scene-canvas">
       <Canvas
@@ -70,15 +75,22 @@ export function MartinScene({ target, isMobile, icons, panel, onSettle, orbitEna
         <DesktopIcons3D icons={icons} dimmed={!!dimmed} />
 
         {panel?.kind === 'finder' && (
-          <WorksSpiral3D
-            works={panel.works}
-            selectedWorkId={panel.selectedWorkId}
-            open={panel.open}
-            paused={panel.paused}
-            showPlay={panel.showPlay}
-            onSelect={panel.onSelect}
-            onPlay={panel.onPlay}
-          />
+          <>
+            {/* Gallery glow — halo behind the centered tile + a faint overhead
+                wash, fading in with the gallery and out on close (panel.open ===
+                worksPhase 'open'). Mounted with the spiral, so it lives across
+                gallery → detail → video and unmounts on return to rest. */}
+            <CenterGlow active={panel.open} struck={!!galleryArrived} />
+            <WorksSpiral3D
+              works={panel.works}
+              selectedWorkId={panel.selectedWorkId}
+              open={panel.open}
+              paused={panel.paused}
+              showPlay={panel.showPlay}
+              onSelect={panel.onSelect}
+              onPlay={panel.onPlay}
+            />
+          </>
         )}
 
         {panel?.kind === 'text' && (

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
+import type CameraControlsImpl from 'camera-controls';
 import { Html } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Work } from '../data/works';
@@ -16,7 +17,7 @@ import {
   ICON_ROWS_Y,
   iconColumnLayout,
 } from './poses';
-import { makeTileMaterial } from './spiralShader';
+import { makeTileMaterial, makeBezelMaterial } from './spiralShader';
 
 export interface WorksSpiral3DProps {
   works: Work[];
@@ -35,6 +36,14 @@ export interface WorksSpiral3DProps {
 const WHEEL_SENSITIVITY = 0.0016; // scroll px → slots
 const TOUCH_SENSITIVITY = 0.01; // drag px → slots (mouse + touch)
 const CLICK_THRESHOLD = 6; // drag less than this many px counts as a click, not a wind
+// Off-ribbon mouse drag orbits the gallery instead of winding. Bounded so the user
+// can look around the helix without losing the framing or swinging behind Martin.
+const ORBIT_SENSITIVITY = 0.005; // drag px → radians
+const ORBIT_AZ_LIMIT = 0.5; // max azimuth swing from the gallery pose (rad)
+const ORBIT_POLAR_LIMIT = 0.32; // max polar swing from the gallery pose (rad)
+// Matches camera-controls' native draggingSmoothTime so the manual orbit trails and
+// settles exactly like the contact/readme drag, instead of snapping (rotate w/o ease).
+const ORBIT_SMOOTH_TIME = 0.12;
 const SNAP_IDLE_MS = 180; // input quiet for this long → snap to nearest work
 const SNAP_DAMP = 10; // how briskly sTarget eases onto the nearest integer
 const SCROLL_DAMP = 7; // how briskly s follows sTarget
@@ -122,6 +131,26 @@ function makeConformGeoms(): ConformGeoms {
   const bezelPos = new THREE.BufferAttribute(bezelArr, 3);
   bezelPos.setUsage(THREE.DynamicDrawUsage);
   bezelGeo.setAttribute('position', bezelPos);
+  // Bake each bezel vertex's along-ribbon coordinate (its width index k → vx in
+  // [-0.5, 0.5]) in the SAME push order conformTile emits, so the bezel shader can
+  // clip per-fragment against the cutoff exactly like the front face. Static — the
+  // positions re-place every frame, but this width mapping never changes.
+  const W = CONFORM_W;
+  const bezelVx = new Float32Array(BEZEL_VERTS);
+  let vo = 0;
+  const vxOf = (k: number) => k / W - 0.5;
+  const quadVx = (a: number, b: number, c: number, e: number) => {
+    bezelVx[vo++] = a; bezelVx[vo++] = b; bezelVx[vo++] = c;
+    bezelVx[vo++] = a; bezelVx[vo++] = c; bezelVx[vo++] = e;
+  };
+  for (let k = 0; k < W; k++) {
+    quadVx(vxOf(k), vxOf(k + 1), vxOf(k + 1), vxOf(k)); // back face
+    quadVx(vxOf(k), vxOf(k), vxOf(k + 1), vxOf(k + 1)); // top wall
+    quadVx(vxOf(k), vxOf(k + 1), vxOf(k + 1), vxOf(k)); // bottom wall
+  }
+  quadVx(vxOf(0), vxOf(0), vxOf(0), vxOf(0)); // left wall
+  quadVx(vxOf(W), vxOf(W), vxOf(W), vxOf(W)); // right wall
+  bezelGeo.setAttribute('aVx', new THREE.BufferAttribute(bezelVx, 1));
   return { frontGeo, bezelGeo, sx, sy, bezelArr, bezelPos };
 }
 
@@ -211,9 +240,6 @@ function conformTile(
   geoms.bezelGeo.computeBoundingSphere();
 }
 
-// Fallback bezel colour for the material's initial value; the live grey level is
-// driven per-frame from SPIRAL.bezel (dimmed by the spotlight).
-const BEZEL_COLOR = 0x3a3a3a;
 
 // One tile on the helix. Starts tiny at the folder icon and, after its stagger,
 // eases out to its spiral slot (reusing the WorksReveal3D spill). Billboards to the
@@ -270,16 +296,7 @@ function SpiralItem({
   // Per-tile bezel material (geometry is shared) so its opacity/brightness can
   // follow this tile's own fade + spotlight. Double-sided so it shows from any
   // angle as the tile turns; depthWrite off to match the transparent video plane.
-  const bezelMaterial = useMemo(
-    () =>
-      new THREE.MeshBasicMaterial({
-        color: BEZEL_COLOR,
-        side: THREE.DoubleSide,
-        transparent: true,
-        depthWrite: false,
-      }),
-    [],
-  );
+  const bezelMaterial = useMemo(() => makeBezelMaterial(), []);
   useEffect(() => () => bezelMaterial.dispose(), [bezelMaterial]);
   // Per-tile conforming geometries (front video + bezel shell), re-placed onto the
   // ribbon surface each frame so this tile's edges line up with its neighbours.
@@ -409,7 +426,14 @@ function SpiralItem({
       6,
       d,
     );
-    material.uniforms.uOpacity.value = smoothstep(SPIRAL.fadeEnd, SPIRAL.fadeStart, aphase) * p;
+    // Spill progress owns the base alpha; the along-ribbon cutoff (computed per
+    // fragment in the shader from these uniforms) is what clears the side tiles
+    // edge-first at a fixed ribbon position, replacing the old uniform edge fade.
+    material.uniforms.uOpacity.value = p;
+    material.uniforms.uPhase.value = phase;
+    material.uniforms.uSpan.value = SPIRAL.fill;
+    material.uniforms.uCut.value = SPIRAL.cutoff;
+    material.uniforms.uBand.value = SPIRAL.cutoffFade;
     // Spotlight: when a work is open, the other tiles sink toward black; the
     // opening tile stays at full brightness.
     const dimTarget = paused && !opening ? BG_DIM : 1;
@@ -421,8 +445,15 @@ function SpiralItem({
     // this the solid edges of the side/back tiles would stay fully visible. Fading
     // by `ribbonFacing` makes the bezel disappear toward the edges with the video.
     const bezelFade = smoothstep(0, 0.4, ribbonFacing(phase));
-    bezelMaterial.opacity = material.uniforms.uOpacity.value * bezelFade;
-    bezelMaterial.color.setScalar(SPIRAL.bezel * material.uniforms.uDim.value);
+    // The bezel clips per-fragment against the SAME cutoff as the video (via its
+    // baked aVx), so its grey back no longer peeks past the wipe at the cutoff.
+    const bu = bezelMaterial.uniforms;
+    bu.uOpacity.value = material.uniforms.uOpacity.value * bezelFade;
+    (bu.uColor.value as THREE.Color).setScalar(SPIRAL.bezel * material.uniforms.uDim.value);
+    bu.uPhase.value = phase;
+    bu.uSpan.value = SPIRAL.fill;
+    bu.uCut.value = SPIRAL.cutoff;
+    bu.uBand.value = SPIRAL.cutoffFade;
 
     // A tile goes live only when it's the centered, settled work AND the shared
     // video has actually loaded that work's loop (liveWorkId). Until then — and on
@@ -488,8 +519,13 @@ export function WorksSpiral3D({ works, open, paused, showPlay, onSelect, onPlay 
   const camera = useThree((s) => s.camera);
   const raycaster = useThree((s) => s.raycaster);
   const gl = useThree((s) => s.gl);
+  const controls = useThree((s) => s.controls) as unknown as CameraControlsImpl | null;
   const aspect = size.width / size.height || 1;
   const pointer = useMemo(() => new THREE.Vector2(), []);
+  // The canvas is pointer-events:none, so camera-controls never sees drags itself;
+  // we drive orbit through its imperative rotate() from the window listeners below.
+  const controlsRef = useRef(controls);
+  controlsRef.current = controls;
 
   // Spill source: the folder icon's world position (top icon in the column).
   // Memoized so it's stable across renders (only changes with the viewport).
@@ -671,47 +707,88 @@ export function WorksSpiral3D({ works, open, paused, showPlay, onSelect, onPlay 
       onSelectRef.current(works[idx], { x: clientX, y: clientY }, world);
     };
 
-    let active = false;
+    // Does a screen point land on a tile? Used to decide drag intent on pointerdown:
+    // grabbing the ribbon winds the helix; missing it (with the mouse) orbits.
+    const hitsTile = (clientX: number, clientY: number) => {
+      const rect = gl.domElement.getBoundingClientRect();
+      pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+      const meshes = tilesRef.current.filter((m): m is THREE.Mesh => !!m);
+      return raycaster.intersectObjects(meshes, false).length > 0;
+    };
+
+    const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+
+    let mode: 'idle' | 'wind' | 'orbit' = 'idle';
     let lastX = 0;
     let lastY = 0;
     let moved = 0;
+    // Bounded orbit offset from the gallery pose, accumulated across drags so the
+    // view stays where the user left it (until they enter a work and return).
+    let orbitAz = 0;
+    let orbitPolar = 0;
     const onPointerDown = (e: PointerEvent) => {
       if (!open || paused) return;
-      active = true;
       lastX = e.clientX;
       lastY = e.clientY;
       moved = 0;
+      // A mouse drag that misses the ribbon orbits the gallery; a hit — or any
+      // touch/pen drag — winds the helix as before.
+      mode = e.pointerType === 'mouse' && !hitsTile(e.clientX, e.clientY) ? 'orbit' : 'wind';
       document.body.style.cursor = 'grabbing';
     };
     const onPointerMove = (e: PointerEvent) => {
-      if (!active) return;
-      // Horizontal drag winds the helix (drag left → next). Track total motion on
-      // both axes so any real drag still suppresses the click-to-open.
-      const dx = lastX - e.clientX;
+      if (mode === 'idle') return;
+      const dx = e.clientX - lastX;
       const dy = e.clientY - lastY;
-      sTarget.current += dx * TOUCH_SENSITIVITY;
       moved += Math.hypot(dx, dy);
       lastX = e.clientX;
       lastY = e.clientY;
-      mark();
+      if (mode === 'wind') {
+        // Drag left → next (negative dx winds forward). Track motion on both axes
+        // so any real drag still suppresses the click-to-open.
+        sTarget.current += -dx * TOUCH_SENSITIVITY;
+        mark();
+        return;
+      }
+      const c = controlsRef.current;
+      if (!c) return;
+      // Signs match camera-controls' native drag (deltaX = lastX - x): azimuth uses
+      // -dx, polar uses -dy, so this orbits the same direction as contact/readme.
+      const nAz = clamp(orbitAz - dx * ORBIT_SENSITIVITY, -ORBIT_AZ_LIMIT, ORBIT_AZ_LIMIT);
+      const nPolar = clamp(orbitPolar - dy * ORBIT_SENSITIVITY, -ORBIT_POLAR_LIMIT, ORBIT_POLAR_LIMIT);
+      // Damp toward the new target (enableTransition) with a dragging-style smooth
+      // time; camera-controls' per-frame update() keeps easing after release too.
+      c.smoothTime = ORBIT_SMOOTH_TIME;
+      c.rotate(nAz - orbitAz, nPolar - orbitPolar, true);
+      orbitAz = nAz;
+      orbitPolar = nPolar;
     };
     const onPointerUp = (e: PointerEvent) => {
-      if (!active) return;
-      active = false;
+      if (mode === 'idle') return;
+      const wasWind = mode === 'wind';
+      mode = 'idle';
       document.body.style.cursor = '';
-      if (moved < CLICK_THRESHOLD) tryOpen(e.clientX, e.clientY);
+      if (wasWind && moved < CLICK_THRESHOLD) tryOpen(e.clientX, e.clientY);
     };
     const onPointerCancel = () => {
-      active = false;
+      mode = 'idle';
       document.body.style.cursor = '';
     };
 
     const onKey = (e: KeyboardEvent) => {
       if (!open || paused) return;
-      if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === 'PageDown') {
+      if (e.key === 'ArrowRight') {
+        sTarget.current -= 1;
+        mark();
+      } else if (e.key === 'ArrowLeft') {
         sTarget.current += 1;
         mark();
-      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp' || e.key === 'PageUp') {
+      } else if (e.key === 'ArrowDown' || e.key === 'PageDown') {
+        sTarget.current += 1;
+        mark();
+      } else if (e.key === 'ArrowUp' || e.key === 'PageUp') {
         sTarget.current -= 1;
         mark();
       }

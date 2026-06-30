@@ -120,6 +120,39 @@ export const GALLERY = {
   faceY: Math.PI,
 };
 
+// ── Scene-wash smoke/haze ─────────────────────────────────────────────────────
+// A thin, uniform, drifting atmospheric haze that fades in with the gallery swing
+// (and stays through detail/video), clearing on return to rest. A handful of large
+// camera-facing billboard planes sample an fbm-noise alpha that slowly churns, with
+// a soft radial edge falloff so the plane borders never show. Rendered BEHIND the
+// works (renderOrder −1) so tiles stay crisp. Faint by design + only a few quads,
+// so it's GPU-cheap. Read fresh every frame, so dev-panel edits apply live.
+// ── Gallery glow ──────────────────────────────────────────────────────────────
+// The gallery reads as a dark void with the centered video as the only light
+// source. Faked additive sprites sell that (the tiles + Martin are unlit, so real
+// three.js lights do nothing): a HALO bleeding out from behind the centered tile,
+// plus two RAYS — diagonal light shafts angling down onto the tile from the upper
+// corners. All billboard to the camera and fade with the gallery. Every field is
+// read fresh each frame by CenterGlow, so dev edits apply live.
+export const GLOW = {
+  /** Halo behind the centered tile. */
+  haloOpacity: 0.17,
+  /** World width/height of the halo sprite (tile is ~1.5×1.28). */
+  haloSize: 4.9,
+  /** Halo tint [r, g, b] in 0..1 (near-white, faintly cool). */
+  haloColor: [0.78, 0.82, 0.92] as [number, number, number],
+  /** Peak alpha of each diagonal shaft. */
+  rayOpacity: 0.13,
+  /** World length of each shaft (tile centre → source up in the corner). */
+  rayLength: 7.6,
+  /** World width of each shaft at its base (it tapers toward the source). */
+  rayWidth: 3.35,
+  /** Tilt of each shaft from vertical, in radians (±, mirrored for the two sides). */
+  rayAngle: 0.62,
+  /** Ray tint [r, g, b] in 0..1 (cool white). */
+  rayColor: [0.74, 0.8, 0.92] as [number, number, number],
+};
+
 // ── Text windows (contact.txt / readme.txt) ──────────────────────────────────
 // The text windows sit FARTHER from the Martin than the video panel so they don't
 // crowd the model. They're pushed back ALONG the gallery camera's view ray
@@ -256,6 +289,13 @@ export const SPIRAL = {
   /** |phase| where tiles start/finish fading out toward the off-screen wrap. */
   fadeStart: 1,
   fadeEnd: 4.5,
+  /** Along-ribbon cutoff: the ribbon is visible only within |position| ≤ `cutoff`
+   *  (in steps from center), wiping into full transparency past it on BOTH sides
+   *  with a narrow `cutoffFade` feather. A tile straddling the line is clipped
+   *  mid-surface (edge-first), not faded as a whole. Keep cutoff < fadeEnd so the
+   *  ribbon clears before the off-screen wrap. */
+  cutoff: 3.1,
+  cutoffFade: 0.44,
   /** |phase| within which a tile counts as focused (color + video + title). */
   focusRange: 0.55,
   /** Plane size [w, h] of each tile in world units (~16:10). Height is used as-is;

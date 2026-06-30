@@ -87,7 +87,7 @@ body {
   opacity: 0;
   transition: opacity 800ms ease;
   background:
-    radial-gradient(135% 105% at 50% 28%, #2c2d31 0%, #1c1d20 34%, #101012 64%, #0a0a0b 100%);
+    radial-gradient(118% 92% at 50% 34%, #16171a 0%, #0c0d10 36%, #050506 68%, #000 100%);
 }
 
 .studio.is-visible {

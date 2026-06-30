@@ -100,10 +100,15 @@ export function CameraRig({
       ref={controls}
       mouseButtons={orbitEnabled ? orbitMouse : blocked}
       touches={orbitEnabled ? orbitTouch : blockedTouch}
-      minDistance={orbitEnabled ? 3 : undefined}
-      maxDistance={orbitEnabled ? 14 : undefined}
-      minPolarAngle={orbitEnabled ? Math.PI * 0.12 : undefined}
-      maxPolarAngle={orbitEnabled ? Math.PI * 0.88 : undefined}
+      // When orbit is off, fall back to camera-controls' permissive DEFAULTS (not
+      // `undefined`): R3F assigns whatever we pass straight onto the instance, and a
+      // number→undefined toggle leaves the limit undefined → clamp() returns NaN the
+      // next time anything rotates (e.g. the gallery's off-ribbon orbit), which
+      // NaNs the camera matrix and breaks the view. Defaults keep poses unconstrained.
+      minDistance={orbitEnabled ? 3 : Number.EPSILON}
+      maxDistance={orbitEnabled ? 14 : Infinity}
+      minPolarAngle={orbitEnabled ? Math.PI * 0.12 : 0}
+      maxPolarAngle={orbitEnabled ? Math.PI * 0.88 : Math.PI}
       makeDefault
     />
   );
