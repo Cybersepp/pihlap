@@ -3,7 +3,7 @@ import { Canvas } from '@react-three/fiber';
 import { Martin } from './Martin';
 import { CameraRig } from './CameraRig';
 import { DesktopIcons3D, SceneIcon } from './DesktopIcons3D';
-import { WorksSpiral3D } from './WorksSpiral3D';
+import { WorksSpiral3D, ShaderPrewarm } from './WorksSpiral3D';
 import { CenterGlow } from './CenterGlow';
 import { TextPanel3D } from './TextPanel3D';
 import { CameraTarget, SCENE_FOV } from './poses';
@@ -71,10 +71,14 @@ export function MartinScene({ target, isMobile, icons, panel, onSettle, orbitEna
         <directionalLight position={[-4, 2.5, -3.5]} intensity={0.7} />
 
         <Suspense fallback={null}>
-          <Martin dimmed={!!dimmed} settings={materialSettings} onReady={onModelReady} />
+          <Martin dimmed={!!dimmed} isMobile={isMobile} settings={materialSettings} onReady={onModelReady} />
         </Suspense>
 
-        <DesktopIcons3D icons={icons} dimmed={!!dimmed} />
+        <DesktopIcons3D icons={icons} isMobile={isMobile} dimmed={!!dimmed} />
+
+        {/* Warm the spiral's shader programs during idle so the first folder open
+            doesn't pay the synchronous compile stall. */}
+        <ShaderPrewarm />
 
         {panel?.kind === 'finder' && (
           <>
@@ -85,6 +89,7 @@ export function MartinScene({ target, isMobile, icons, panel, onSettle, orbitEna
             <CenterGlow active={panel.open} struck={!!galleryArrived} camDest={galleryCamPos} />
             <WorksSpiral3D
               works={panel.works}
+              isMobile={isMobile}
               selectedWorkId={panel.selectedWorkId}
               open={panel.open}
               paused={panel.paused}

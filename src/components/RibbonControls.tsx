@@ -4,13 +4,16 @@ import {
   SPIRAL,
   DETAIL,
   GLOW,
+  MODEL,
   TEXT_PANEL,
   FOCUS_SMOOTH_TIME,
   getLastDetailWorld,
   getDetailPoseFromWorld,
   notifyTextPanelChange,
+  notifyIconLayoutChange,
 } from '../three/poses';
 import { applyPose } from '../three/liveCamera';
+import { DISSOLVE, GLITCH, replayDissolve, triggerGlitch } from '../three/materialSettings';
 import { getViewportSize } from '../lib/device';
 
 // A dev-only live tuning panel for the works ribbon. Every control mutates the
@@ -229,6 +232,100 @@ const TEXT_PANEL_CONTROLS: Ctl[] = [
   textPanel('height', 200, 900, 10, 'height (px)'),
 ];
 
+// The figure's facing + idle-float + swing choreography. Martin reads MODEL fresh
+// each frame, so edits apply live.
+type ModelKey =
+  | 'restYaw'
+  | 'swingDuration'
+  | 'hoverAmplitude'
+  | 'hoverSpeed'
+  | 'swayAmplitude'
+  | 'iconRise'
+  | 'iconDepth';
+// Most MODEL fields are read per frame by Martin, so a plain mutation applies live.
+const model = (key: ModelKey, min: number, max: number, step: number, label: string): Ctl => ({
+  label,
+  min,
+  max,
+  step,
+  get: () => MODEL[key],
+  set: (v) => {
+    MODEL[key] = v;
+  },
+});
+
+// iconRise / iconDepth feed iconLayout, which DesktopIcons3D computes at render time
+// (not per frame) — so notify it to re-render, or the sliders look dead.
+const modelIcon = (key: ModelKey, min: number, max: number, step: number, label: string): Ctl => ({
+  label,
+  min,
+  max,
+  step,
+  get: () => MODEL[key],
+  set: (v) => {
+    MODEL[key] = v;
+    notifyIconLayoutChange();
+  },
+});
+
+const MODEL_CONTROLS: Ctl[] = [
+  model('restYaw', 0, Math.PI * 2, 0.02, 'restYaw (facing)'),
+  model('swingDuration', 0.3, 3, 0.05, 'swingDuration (swing s)'),
+  model('hoverAmplitude', 0, 0.4, 0.005, 'hoverAmplitude (float)'),
+  model('hoverSpeed', 0, 2, 0.02, 'hoverSpeed (float rate)'),
+  model('swayAmplitude', 0, 0.15, 0.002, 'swayAmplitude (tilt)'),
+  modelIcon('iconRise', -0.5, 0.9, 0.01, 'iconRise (row height)'),
+  modelIcon('iconDepth', -3, 1, 0.05, 'iconDepth (row behind)'),
+];
+
+// The intro materialize dissolve. All fields are pushed into the live material
+// each frame by Martin, so edits apply on the next replay (or mid-reveal). Hit
+// "replay" to re-trigger the intro and preview a change.
+const dissolve = (key: keyof typeof DISSOLVE, min: number, max: number, step: number, label: string): Ctl => ({
+  label,
+  min,
+  max,
+  step,
+  get: () => DISSOLVE[key],
+  set: (v) => {
+    DISSOLVE[key] = v;
+  },
+});
+
+const DISSOLVE_CONTROLS: Ctl[] = [
+  dissolve('durationMs', 300, 4000, 50, 'durationMs (speed)'),
+  dissolve('blocky', 0, 1, 0.02, 'blocky (pixel/voxel)'),
+  dissolve('pixel', 4, 80, 1, 'pixel (voxel res)'),
+  dissolve('scale', 2, 40, 0.5, 'scale (noise res)'),
+  dissolve('gradBias', 0, 1, 0.02, 'gradBias (noise↔wipe)'),
+  dissolve('edge', 0.01, 0.3, 0.005, 'edge (glow width)'),
+  dissolve('glowR', 0, 3, 0.05, 'glowR'),
+  dissolve('glowG', 0, 3, 0.05, 'glowG'),
+  dissolve('glowB', 0, 3, 0.05, 'glowB'),
+];
+
+// Occasional idle glitch (blinks voxels off in short bursts). Read live by Martin,
+// so edits apply to the next burst — hit "glitch" to fire one now.
+const glitchCtl = (key: keyof typeof GLITCH, min: number, max: number, step: number, label: string): Ctl => ({
+  label,
+  min,
+  max,
+  step,
+  get: () => GLITCH[key],
+  set: (v) => {
+    GLITCH[key] = v;
+  },
+});
+
+const GLITCH_CONTROLS: Ctl[] = [
+  glitchCtl('amount', 0, 0.9, 0.01, 'amount (cells)'),
+  glitchCtl('pixel', 3, 80, 1, 'pixel (block size)'),
+  glitchCtl('burst', 0.05, 1, 0.01, 'burst (duration s)'),
+  glitchCtl('minGap', 0.5, 12, 0.5, 'minGap (s)'),
+  glitchCtl('maxGap', 1, 20, 0.5, 'maxGap (s)'),
+  glitchCtl('glow', 0, 3, 0.05, 'glow'),
+];
+
 const panel: React.CSSProperties = {
   position: 'fixed',
   top: 12,
@@ -384,6 +481,74 @@ export function TextWindowControls() {
       {open && (
         <div style={{ overflowY: 'auto', minHeight: 0 }}>
           {TEXT_PANEL_CONTROLS.map((c) => (
+            <Slider key={c.label} ctl={c} onChange={force} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// The figure choreography tuner. Docked top-LEFT (opposite the ribbon panel) and
+// mounted in DEV regardless of window state. Tune the idle float / facing / swing
+// live, then Copy into MODEL in poses.ts.
+const modelPanel: React.CSSProperties = { ...panel, left: 12, right: 'auto', width: 210 };
+
+export function ModelControls() {
+  const [, force] = useReducer((c) => c + 1, 0);
+  const [open, setOpen] = useState(true);
+  const [copied, setCopied] = useState(false);
+
+  const copy = () => {
+    const mdl = MODEL_CONTROLS.map((c) => `  ${c.label.split(' ')[0]}: ${round(c.get())},`);
+    const dsv = DISSOLVE_CONTROLS.map((c) => `  ${c.label.split(' ')[0]}: ${round(c.get())},`);
+    const glt = GLITCH_CONTROLS.map((c) => `  ${c.label.split(' ')[0]}: ${round(c.get())},`);
+    navigator.clipboard
+      ?.writeText(`// MODEL\n${mdl.join('\n')}\n// DISSOLVE\n${dsv.join('\n')}\n// GLITCH\n${glt.join('\n')}`)
+      .then(
+        () => {
+          setCopied(true);
+          window.setTimeout(() => setCopied(false), 1200);
+        },
+        () => {},
+      );
+  };
+
+  return (
+    <div style={modelPanel}>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: open ? 10 : 0 }}>
+        <strong style={{ fontSize: 12, flex: 1 }}>figure</strong>
+        {open && (
+          <button style={{ ...btn, flex: 'none', padding: '3px 8px' }} onClick={copy}>
+            {copied ? 'copied ✓' : 'copy'}
+          </button>
+        )}
+        <button style={{ ...btn, flex: 'none', padding: '3px 9px' }} onClick={() => setOpen((o) => !o)}>
+          {open ? '–' : '+'}
+        </button>
+      </div>
+
+      {open && (
+        <div style={{ overflowY: 'auto', minHeight: 0 }}>
+          {MODEL_CONTROLS.map((c) => (
+            <Slider key={c.label} ctl={c} onChange={force} />
+          ))}
+          <div style={{ ...section, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>dissolve (intro)</span>
+            <button style={{ ...btn, flex: 'none', padding: '2px 8px' }} onClick={replayDissolve}>
+              replay
+            </button>
+          </div>
+          {DISSOLVE_CONTROLS.map((c) => (
+            <Slider key={c.label} ctl={c} onChange={force} />
+          ))}
+          <div style={{ ...section, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>idle glitch</span>
+            <button style={{ ...btn, flex: 'none', padding: '2px 8px' }} onClick={triggerGlitch}>
+              glitch
+            </button>
+          </div>
+          {GLITCH_CONTROLS.map((c) => (
             <Slider key={c.label} ctl={c} onChange={force} />
           ))}
         </div>

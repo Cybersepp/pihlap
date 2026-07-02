@@ -19,7 +19,7 @@ import { works, Work } from './data/works';
 import { DEFAULT_MATERIAL_SETTINGS } from './three/materialSettings';
 import { readMeText } from './data/content';
 import { ContactCard } from './components/ContactCard';
-import { RibbonControls, TextWindowControls } from './components/RibbonControls';
+import { RibbonControls, TextWindowControls, ModelControls } from './components/RibbonControls';
 import { SignatureIntro } from './components/SignatureIntro';
 import { getViewportSize, shouldUseMobileLayout } from './lib/device';
 import { applyPose } from './three/liveCamera';
@@ -244,13 +244,15 @@ export default function App() {
       smoothTime: FOCUS_SMOOTH_TIME,
     };
   } else if (windowState.type === 'none') {
-    cameraTarget = { key: 'rest', spec: poseSet.rest };
+    // The big rest↔gallery swing uses the hand-driven ease-in-out curve (slow →
+    // fast → slow); the snappy fly-to-tile focus keeps its spring above.
+    cameraTarget = { key: 'rest', spec: poseSet.rest, ease: 'inout' };
   } else {
     // finder / contact / readme all share the gallery pose, but keep DISTINCT keys
     // so switching between these tabs re-issues setLookAt — easing the camera back
     // to the canonical gallery framing and discarding any orbit done in the
     // previous tab (e.g. orbiting readme, then opening selected works).
-    cameraTarget = { key: `gallery:${windowState.type}`, spec: poseSet.gallery };
+    cameraTarget = { key: `gallery:${windowState.type}`, spec: poseSet.gallery, ease: 'inout' };
   }
 
   // "Broken": the camera has left rest (any window open), so the cloudy desktop
@@ -363,6 +365,9 @@ export default function App() {
       {/* Dev-only live tuning panels. The ribbon panel shows while the gallery is
           open; the text-window panel is a separate window docked beside it, shown
           while contact/readme is open. */}
+      {/* Figure choreography tuner — mounted always in DEV (docked top-left) so the
+          turn-to-face is tunable at rest, where the figure's face is visible. */}
+      {import.meta.env.DEV && <ModelControls />}
       {import.meta.env.DEV && worksPhase !== 'closed' && <RibbonControls />}
       {import.meta.env.DEV &&
         (windowState.type === 'contact' || windowState.type === 'readme') && (

@@ -21,6 +21,13 @@ export interface CameraTarget {
   spec: PoseSpec;
   /** Per-move easing time (seconds). Defaults to CAMERA_SMOOTH_TIME. */
   smoothTime?: number;
+  /**
+   * Easing curve for this move. Omitted = camera-controls' critically-damped
+   * spring (ease-OUT: quick off the mark, decelerating in) via `smoothTime`.
+   * `'inout'` = the rig hand-drives a fixed-duration slow→fast→slow curve
+   * (see CameraRig / MODEL.swingDuration) — the cinematic gallery swing.
+   */
+  ease?: 'inout';
 }
 
 // Where the works window panel floats in world space (in front of the Martin,
@@ -45,7 +52,7 @@ export const GALLERY_CENTER: [number, number, number] = [0, 1, 0];
 // Mobile sits a touch farther back so the helix isn't clipped on a narrow viewport.
 export const POSES: Record<'rest' | 'gallery', PoseSpec> = {
   rest: { position: [0, 0.0, 7], target: [0, 0.0, 0] },
-  gallery: { position: [0, 0.2, -6.2], target: GALLERY_CENTER },
+  gallery: { position: [0, 0.2, -7.8], target: GALLERY_CENTER },
 };
 
 export const POSES_MOBILE: Record<'rest' | 'gallery', PoseSpec> = {
@@ -57,13 +64,48 @@ export const POSES_MOBILE: Record<'rest' | 'gallery', PoseSpec> = {
 // Canvas and by DesktopIcons3D to frame the icon column against the rest frustum.
 export const SCENE_FOV = 32;
 
-// How tall (in world units) the Martin's largest dimension is normalized to.
+// How tall (in world units) the Martin's largest dimension is normalized to at a
+// reference viewport. Actual rest size is computed by modelRestWorldSize() from
+// viewport fractions below — this constant is only the GLB normalization fallback.
 export const TARGET_SIZE = 3.0;
+
+// Rest-pose screen share: the model's largest world dimension is capped to fit
+// inside these fractions of the visible frustum at z = 0. Height and width are
+// both checked so portrait/narrow viewports shrink the figure instead of clipping
+// it. Mobile uses a slightly smaller height fraction to leave room for the bottom icon row.
+export const MODEL_VIEWPORT_HEIGHT_FRACTION = 0.36;
+export const MODEL_VIEWPORT_HEIGHT_FRACTION_MOBILE = 0.33;
+export const MODEL_VIEWPORT_WIDTH_FRACTION = 0.34;
+export const MODEL_VIEWPORT_WIDTH_FRACTION_MOBILE = 0.42;
 
 // Extra rotation applied to the model, in radians [x, y, z]. Sketchfab exports
 // don't always face +Z (toward the resting camera). If the Martin shows its
-// back or side at rest, nudge the Y value here.
-export const MODEL_ROTATION: [number, number, number] = [0, 4, 0.2];
+// back or side at rest, nudge the Y value here. The Y (yaw) mirrors MODEL.restYaw
+// (which Martin drives live) — keep the two in sync if you retune the facing.
+export const MODEL_ROTATION: [number, number, number] = [0, 4.66, 0.2];
+
+// Live-tunable model choreography (mutable, read fresh each frame by Martin.tsx —
+// same tune-live-then-copy workflow as SPIRAL/DETAIL). The figure sits at a fixed
+// facing and floats gently in place — a slow vertical bob plus a subtle tilt sway,
+// suiting the seated/weightless pose. `swingDuration` is the ease-in-out gallery
+// swing length (see CameraRig).
+export const MODEL = {
+  /** Fixed yaw the figure faces (radians). Mirror of MODEL_ROTATION[1]. */
+  restYaw: 4.66,
+  /** Seconds for the ease-in-out rest↔gallery camera swing. */
+  swingDuration: 1.95,
+  /** Idle hover: vertical bob amplitude in world units (0 = no float). */
+  hoverAmplitude: 0.025,
+  /** Idle hover: bob angular speed (rad/s); ~1.2 ≈ a ~5s breath cycle. */
+  hoverSpeed: 1.2,
+  /** Idle hover: subtle tilt-sway amplitude (radians) for an organic float. */
+  swayAmplitude: 0.018,
+  /** Icon row height: fraction of his rest world size ABOVE his feet (0 = at his
+   *  feet, higher = up toward his legs/lap, ~level with him). */
+  iconRise: 0.15,
+  /** Icon row depth: world Z offset (negative = set back behind his legs). */
+  iconDepth: 1,
+};
 
 // Seconds for the camera to ease between poses (camera-controls smoothTime).
 // CAMERA_SMOOTH_TIME is the default (the cinematic swing behind the Martin);
@@ -73,40 +115,98 @@ export const CAMERA_SMOOTH_TIME = 0.85;
 // expand-toward-camera flourish when a video opens.
 export const FOCUS_SMOOTH_TIME = 0.6;
 
-// ── Desktop icons (responsive layout) ───────────────────────────────────────
-// The icons are NOT positioned with hardcoded coordinates. Instead DesktopIcons3D
-// computes their world positions from the resting camera's view frustum, so they
-// hug the left edge and fit any viewport/aspect (desktop or phone) automatically.
-// They stay world-anchored (fixed during the camera swing → real parallax); only
-// a viewport resize repositions them. Tune the layout with the constants below.
+// ── Desktop icons (row under the figure) ─────────────────────────────────────
+// The icons are NOT positioned with hardcoded coordinates. They sit in ONE centered
+// horizontal row directly under Martin — at every viewport — a fixed world gap below
+// his measured feet (so the gap stays consistent as the model resizes with the
+// viewport). Placement is framed against the rest pose, so the row stays world-
+// anchored and parallaxes as the camera swings; a resize repositions it.
 
 // The desktop-icon DOM width in CSS px (see `.desktop-icon` in styles.css).
 export const ICON_PX_WIDTH = 108;
-// Vertical world positions for the stacked icons (top → bottom), index-matched
-// to the icon order. Constant across devices — the visible height barely changes
-// with aspect, so these always fit.
-export const ICON_ROWS_Y = [1.5, 0.5, -0.5];
-// World gap kept between the left viewport edge and the icon column.
-export const ICON_EDGE_MARGIN = 0.15;
-// Base scale at full size; auto-shrinks on narrow viewports so an icon never
-// exceeds ICON_MAX_WIDTH_FRACTION of the visible width.
+// Base scale at full size; auto-shrinks on narrow viewports so a single icon never
+// exceeds ICON_ROW_MAX_WIDTH_FRACTION of the visible width (keeps N + gaps on-screen).
 export const ICON_BASE_SCALE = 0.3075;
-export const ICON_MAX_WIDTH_FRACTION = 0.3;
+export const ICON_ROW_MAX_WIDTH_FRACTION = 0.2;
+// World gap between adjacent icons in the row.
+export const ICON_ROW_GAP = 0.12;
+// Safety margin from the bottom viewport edge — the row clamps to just inside the
+// frame rather than clipping off if it's ever placed below the visible bottom.
+export const ICON_ROW_BOTTOM_MARGIN = 0.12;
+// The standard icon count (folder / contact / readme) — the default row size, and
+// what centers positions[0] consistently for the works cloud's fly-out origin.
+export const ICON_COUNT = 3;
 
-// World X (and on-screen scale) of the desktop icon column for a given viewport
-// aspect, framed against the rest pose. Shared by DesktopIcons3D (to place the
-// column) and WorksSpiral3D (so the files spill out of the actual folder icon).
-export function iconColumnLayout(aspect: number): { x: number; scale: number } {
-  const HTML_TRANSFORM_DIVISOR = 40;
+const HTML_TRANSFORM_DIVISOR = 40;
+
+// Rest-pose frustum half-extents at the icon plane (z = 0) for a given aspect.
+function restFrustumHalf(aspect: number): { halfW: number; halfH: number } {
   const restDist = POSES.rest.position[2];
   const halfH = restDist * Math.tan((SCENE_FOV * Math.PI) / 360);
-  const halfW = halfH * aspect;
+  return { halfW: halfH * aspect, halfH };
+}
+
+// World size for the Martin's largest dimension at rest, so it occupies a fixed
+// share of the viewport. Recomputed on resize/aspect change — same frustum math
+// as iconLayout. Narrow viewports are width-limited; wide ones height-limited.
+export function modelRestWorldSize(aspect: number, isMobile: boolean): number {
+  const { halfW, halfH } = restFrustumHalf(aspect);
+  const visibleH = halfH * 2;
+  const visibleW = halfW * 2;
+  const heightFrac = isMobile
+    ? MODEL_VIEWPORT_HEIGHT_FRACTION_MOBILE
+    : MODEL_VIEWPORT_HEIGHT_FRACTION;
+  const widthFrac = isMobile
+    ? MODEL_VIEWPORT_WIDTH_FRACTION_MOBILE
+    : MODEL_VIEWPORT_WIDTH_FRACTION;
+  return Math.min(visibleH * heightFrac, visibleW * widthFrac);
+}
+
+// Martin's resting bottom (feet) as a fraction of his rest world size (feet / size,
+// ≈ -0.5). Published once by Martin.tsx after it measures the rotated+scaled model
+// (see setModelFeetRatio), so the icon row can sit a fixed gap below his feet AND
+// track his size across viewports. A sensible estimate applies until Martin mounts.
+let _modelFeetRatio = -0.5;
+export function setModelFeetRatio(ratio: number): void {
+  _modelFeetRatio = ratio;
+}
+// World Y of Martin's feet at rest for the given viewport.
+export function modelRestFeetY(aspect: number, isMobile: boolean): number {
+  return _modelFeetRatio * modelRestWorldSize(aspect, isMobile);
+}
+
+export interface IconLayout {
+  /** World positions per icon, index-matched to icon order. */
+  positions: [number, number, number][];
+  scale: number;
+}
+
+// Single source of truth for icon placement, framed against the rest pose. Shared
+// by DesktopIcons3D (to place the icons) and WorksSpiral3D (so files spill out of
+// the real folder icon at positions[0]). One centered row under Martin, a fixed gap
+// below his feet, on every device. `count` defaults to the standard three icons.
+export function iconLayout(
+  aspect: number,
+  isMobile: boolean,
+  count: number = ICON_COUNT,
+): IconLayout {
+  const { halfW, halfH } = restFrustumHalf(aspect);
   const fullWidth = (ICON_PX_WIDTH * ICON_BASE_SCALE) / HTML_TRANSFORM_DIVISOR;
   const scale =
-    ICON_BASE_SCALE * Math.min(1, (ICON_MAX_WIDTH_FRACTION * 2 * halfW) / fullWidth);
-  const iconHalfWidth = (ICON_PX_WIDTH * scale) / HTML_TRANSFORM_DIVISOR / 2;
-  const x = -halfW + ICON_EDGE_MARGIN + iconHalfWidth;
-  return { x, scale };
+    ICON_BASE_SCALE * Math.min(1, (ICON_ROW_MAX_WIDTH_FRACTION * 2 * halfW) / fullWidth);
+  const iconWidth = (ICON_PX_WIDTH * scale) / HTML_TRANSFORM_DIVISOR;
+  const step = iconWidth + ICON_ROW_GAP;
+  // Centered on Martin (x = 0), raised MODEL.iconRise of his height above his feet
+  // (so it sits around his legs, ~level with him) and set back MODEL.iconDepth in Z
+  // (behind his legs). Clamped so it can't drop off the bottom of the frame.
+  const desiredY =
+    modelRestFeetY(aspect, isMobile) + MODEL.iconRise * modelRestWorldSize(aspect, isMobile);
+  const rowY = Math.max(desiredY, -halfH + ICON_ROW_BOTTOM_MARGIN + iconWidth / 2);
+  const positions = Array.from({ length: count }, (_, i) => {
+    const x = (i - (count - 1) / 2) * step;
+    return [x, rowY, MODEL.iconDepth] as [number, number, number];
+  });
+  return { positions, scale };
 }
 
 // ── 3D works gallery ────────────────────────────────────────────────────────
@@ -207,6 +307,20 @@ export function onTextPanelChange(cb: () => void): () => void {
 }
 export function notifyTextPanelChange(): void {
   _textPanelListeners.forEach((cb) => cb());
+}
+
+// Same pub/sub for the icon row: DesktopIcons3D computes iconLayout at render time
+// (not per frame), so a dev-panel edit to MODEL.iconRise / MODEL.iconDepth needs a
+// re-render to apply live. No-op in production (nothing notifies).
+const _iconLayoutListeners = new Set<() => void>();
+export function onIconLayoutChange(cb: () => void): () => void {
+  _iconLayoutListeners.add(cb);
+  return () => {
+    _iconLayoutListeners.delete(cb);
+  };
+}
+export function notifyIconLayoutChange(): void {
+  _iconLayoutListeners.forEach((cb) => cb());
 }
 
 // ── 3D works cloud ──────────────────────────────────────────────────────────

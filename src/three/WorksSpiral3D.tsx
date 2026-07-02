@@ -9,18 +9,19 @@ import { WorkTitle } from '../components/WorkTitle';
 import {
   SPIRAL,
   DETAIL,
+  CAMERA_SMOOTH_TIME,
   nearestCongruentSlot,
   spiralPosition,
   ribbonFrame,
   ribbonFacing,
   ribbonUp,
-  ICON_ROWS_Y,
-  iconColumnLayout,
+  iconLayout,
 } from './poses';
 import { makeTileMaterial, makeBezelMaterial } from './spiralShader';
 
 export interface WorksSpiral3DProps {
   works: Work[];
+  isMobile?: boolean;
   selectedWorkId?: string;
   /** true = files spill out of the folder onto the spiral; false = fly back in. */
   open: boolean;
@@ -46,6 +47,11 @@ const ORBIT_POLAR_LIMIT = 0.32; // max polar swing from the gallery pose (rad)
 // Matches camera-controls' native draggingSmoothTime so the manual orbit trails and
 // settles exactly like the contact/readme drag, instead of snapping (rotate w/o ease).
 const ORBIT_SMOOTH_TIME = 0.12;
+const PRIORITY_POSTERS = 5; // posters loaded eagerly on open; the rest defer to idle
+// Hold the spill until the camera is ~this far through its swing toward the gallery,
+// so the files don't fan out over Martin's face while the view is still behind him.
+// Tied to CAMERA_SMOOTH_TIME (the gallery move's easing) so it tracks that constant.
+const SPILL_CAMERA_LEAD_MS = CAMERA_SMOOTH_TIME * 1000 * 0.9;
 const SNAP_IDLE_MS = 180; // input quiet for this long → snap to nearest work
 const SNAP_DAMP = 10; // how briskly sTarget eases onto the nearest integer
 const SCROLL_DAMP = 7; // how briskly s follows sTarget
@@ -74,6 +80,31 @@ const WORLD_FWD = new THREE.Vector3(0, 0, 1);
 // fall back to the Kai Angel placeholder (their poster is already the Kai frame).
 const PLACEHOLDER_LOOP = `${import.meta.env.BASE_URL}loops/kai-angel-prada-party.mp4`;
 const posterUrl = (work: Work) => `${import.meta.env.BASE_URL}loops/${work.id}.jpg`;
+
+// Poster frames are cached at module scope and shared across every mount of the
+// spiral, so toggling the folder shut and open again never re-decodes or re-uploads
+// them. There are only a dozen (all small), so they intentionally live for the
+// page's lifetime and are never disposed — a spiral unmount drops its React
+// references but leaves the GPU textures resident for the next open.
+const posterCache = new Map<string, THREE.Texture>();
+const posterLoader = new THREE.TextureLoader();
+
+function loadPoster(work: Work): Promise<THREE.Texture> {
+  const cached = posterCache.get(work.id);
+  if (cached) return Promise.resolve(cached);
+  return new Promise((resolve, reject) => {
+    posterLoader.load(
+      posterUrl(work),
+      (t) => {
+        t.colorSpace = THREE.SRGBColorSpace;
+        posterCache.set(work.id, t);
+        resolve(t);
+      },
+      undefined,
+      reject,
+    );
+  });
+}
 
 function smoothstep(e0: number, e1: number, x: number): number {
   const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0)));
@@ -316,6 +347,11 @@ function SpiralItem({
   const prog = useRef(0); // 0 = in the folder, 1 = out on the slot
   const clock = useRef(0); // time since the current open/close flip (for stagger)
   const prevOpen = useRef(open);
+  // Whether this tile has ever spilled out. A fresh mount sits at prog≈0 with
+  // open=false (the spill leads the camera swing), so without this the close branch
+  // below would run its fly-BACK stagger on mount — popping the tile out then
+  // retracting it. The flyback only makes sense once the tile has actually opened.
+  const hasOpened = useRef(false);
   const growX = useRef(0); // horizontal open-expansion 0→1
   const growY = useRef(0); // vertical open-expansion 0→1 (leads X)
   // conformTile is camera-independent — its output depends ONLY on phase and bow.
@@ -333,10 +369,14 @@ function SpiralItem({
     if (open !== prevOpen.current) {
       prevOpen.current = open;
       clock.current = 0;
+      if (open) hasOpened.current = true;
     }
     clock.current += d;
     const past = clock.current > delay;
-    const target = open ? (past ? 1 : 0) : past ? 0 : 1;
+    // open: hold in the folder until this tile's stagger, then spill out. closed:
+    // if it had spilled, run the fly-back (hold out until its stagger, then retract);
+    // if it never opened (fresh mount ahead of the spill lead), just stay tucked in.
+    const target = open ? (past ? 1 : 0) : hasOpened.current ? (past ? 0 : 1) : 0;
     prog.current = THREE.MathUtils.damp(prog.current, target, 6, d);
     const p = prog.current;
 
@@ -516,7 +556,7 @@ function SpiralItem({
 // The works gallery as an endless upward helix around Martin. Scroll/drag winds it
 // and snaps the nearest work to front-and-center, where it reveals into color with
 // a scrambling title. Clicking the centered tile opens the existing video player.
-export function WorksSpiral3D({ works, open, paused, playerOpen, showPlay, onSelect, onPlay }: WorksSpiral3DProps) {
+export function WorksSpiral3D({ works, isMobile = false, open, paused, playerOpen, showPlay, onSelect, onPlay }: WorksSpiral3DProps) {
   const size = useThree((s) => s.size);
   const camera = useThree((s) => s.camera);
   const raycaster = useThree((s) => s.raycaster);
@@ -532,8 +572,8 @@ export function WorksSpiral3D({ works, open, paused, playerOpen, showPlay, onSel
   // Spill source: the folder icon's world position (top icon in the column).
   // Memoized so it's stable across renders (only changes with the viewport).
   const from = useMemo<[number, number, number]>(
-    () => [iconColumnLayout(aspect).x, ICON_ROWS_Y[0] ?? 0, 0],
-    [aspect],
+    () => iconLayout(aspect, isMobile).positions[0] ?? [0, 0, 0],
+    [aspect, isMobile],
   );
 
 
@@ -582,32 +622,8 @@ export function WorksSpiral3D({ works, open, paused, playerOpen, showPlay, onSel
     return t;
   }, []);
   const [posters, setPosters] = useState<(THREE.Texture | null)[]>(() =>
-    works.map(() => null),
+    works.map((w) => posterCache.get(w.id) ?? null),
   );
-  useEffect(() => {
-    const loader = new THREE.TextureLoader();
-    const loaded: THREE.Texture[] = [];
-    let cancelled = false;
-    works.forEach((work, i) => {
-      loader.load(posterUrl(work), (t) => {
-        if (cancelled) {
-          t.dispose();
-          return;
-        }
-        t.colorSpace = THREE.SRGBColorSpace;
-        loaded[i] = t;
-        setPosters((prev) => {
-          const next = [...prev];
-          next[i] = t;
-          return next;
-        });
-      });
-    });
-    return () => {
-      cancelled = true;
-      loaded.forEach((t) => t?.dispose());
-    };
-  }, [works]);
   useEffect(() => () => fallbackTex.dispose(), [fallbackTex]);
 
   const n = works.length;
@@ -631,16 +647,82 @@ export function WorksSpiral3D({ works, open, paused, playerOpen, showPlay, onSel
   // doesn't need to rebind its window listeners.
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
+  const onPlayRef = useRef(onPlay);
+  onPlayRef.current = onPlay;
+  const showPlayRef = useRef(showPlay);
+  showPlayRef.current = showPlay;
   // Per-tile spill stagger, ordered top→bottom; and whether the cascade has
   // settled enough to let the centered tile reveal into color.
   const [delays, setDelays] = useState<number[]>(() => works.map((_, i) => i * STAGGER));
   const [reveal, setReveal] = useState(false);
 
+  // The spill runs off `spillOpen`, not `open`: opening leads by SPILL_CAMERA_LEAD_MS
+  // so the files hold in the folder until the camera is partway through its swing to
+  // the gallery, then fan out as it arrives. Closing drops immediately so the
+  // fly-back into the folder reads promptly. Everything else (video, input) still
+  // keys off the real `open`.
+  // Starts false even though the spiral mounts with open=true (folder click), so the
+  // lead applies on that first open too rather than spilling instantly on mount.
+  const [spillOpen, setSpillOpen] = useState(false);
+  useEffect(() => {
+    if (!open) {
+      setSpillOpen(false);
+      return;
+    }
+    const t = window.setTimeout(() => setSpillOpen(true), SPILL_CAMERA_LEAD_MS);
+    return () => window.clearTimeout(t);
+  }, [open]);
+
+  // Poster loading, prioritised. The ~5 tiles nearest front-and-center at the
+  // current scroll load immediately (they're the ones the eye lands on as the
+  // spiral opens); the rest defer to idle so their decode+GPU-upload spreads past
+  // the open animation instead of stacking on the click. Cached posters were
+  // already seeded into initial state, so only the misses are fetched here.
+  useEffect(() => {
+    let cancelled = false;
+    const s = sRef.current;
+    const order = works
+      .map((_, idx) => idx)
+      .filter((idx) => !posterCache.has(works[idx].id))
+      .sort(
+        (a, b) =>
+          Math.abs(nearestCongruentSlot(a, s, n) - s) -
+          Math.abs(nearestCongruentSlot(b, s, n) - s),
+      );
+    const fetchOne = (idx: number) =>
+      loadPoster(works[idx])
+        .then((t) => {
+          if (cancelled) return;
+          setPosters((prev) => {
+            const next = [...prev];
+            next[idx] = t;
+            return next;
+          });
+        })
+        .catch(() => {});
+
+    order.slice(0, PRIORITY_POSTERS).forEach(fetchOne);
+    const rest = order.slice(PRIORITY_POSTERS);
+    const loadRest = () => rest.forEach(fetchOne);
+    const ric = (window as unknown as {
+      requestIdleCallback?: (cb: () => void) => number;
+    }).requestIdleCallback;
+    const idleHandle = ric ? ric(loadRest) : window.setTimeout(loadRest, 400);
+    return () => {
+      cancelled = true;
+      const cic = (window as unknown as {
+        cancelIdleCallback?: (h: number) => void;
+      }).cancelIdleCallback;
+      if (ric && cic) cic(idleHandle);
+      else window.clearTimeout(idleHandle as number);
+    };
+  }, [works, n]);
+
   // On open, order the spill by each tile's slot height (top first) at the
   // current scroll position, then arm the center reveal once the whole cascade
   // has had time to settle into place.
   useEffect(() => {
-    if (!open) {
+    if (!spillOpen) {
       setReveal(false);
       return;
     }
@@ -654,7 +736,7 @@ export function WorksSpiral3D({ works, open, paused, playerOpen, showPlay, onSel
     const settleMs = (works.length - 1) * STAGGER * 1000 + SPILL_SETTLE_MS;
     const t = window.setTimeout(() => setReveal(true), settleMs);
     return () => window.clearTimeout(t);
-  }, [open, works, n]);
+  }, [spillOpen, works, n]);
 
   // Swap the shared <video> to the centered work's loop and play it — but only
   // after focus holds briefly, so winding the helix doesn't thrash the src. The
@@ -772,9 +854,9 @@ export function WorksSpiral3D({ works, open, paused, playerOpen, showPlay, onSel
       lastX = e.clientX;
       lastY = e.clientY;
       if (mode === 'wind') {
-        // Drag left → next (negative dx winds forward). Track motion on both axes
+        // Drag right → next (positive dx winds forward). Track motion on both axes
         // so any real drag still suppresses the click-to-open.
-        sTarget.current += -dx * TOUCH_SENSITIVITY;
+        sTarget.current += dx * TOUCH_SENSITIVITY;
         mark();
         return;
       }
@@ -803,8 +885,27 @@ export function WorksSpiral3D({ works, open, paused, playerOpen, showPlay, onSel
       document.body.style.cursor = '';
     };
 
+    // Open the centered tile without a pointer (keyboard Enter): read its world
+    // position from the focused tile's group, mirroring tryOpen's raycast path.
+    const openFocused = () => {
+      const idx = focusRef.current;
+      const g = tilesRef.current[idx]?.parent;
+      const world: [number, number, number] = g
+        ? [g.position.x, g.position.y, g.position.z]
+        : from;
+      onSelectRef.current(works[idx], { x: window.innerWidth / 2, y: window.innerHeight / 2 }, world);
+    };
+
     const onKey = (e: KeyboardEvent) => {
-      if (!open || paused) return;
+      if (!open) return;
+      // Enter walks the same path as clicking: first press opens the detail view,
+      // a second press (detail state → showPlay) starts the DOM player.
+      if (e.key === 'Enter') {
+        if (showPlayRef.current) onPlayRef.current();
+        else if (!paused) openFocused();
+        return;
+      }
+      if (paused) return;
       if (e.key === 'ArrowRight') {
         sTarget.current -= 1;
         mark();
@@ -861,7 +962,7 @@ export function WorksSpiral3D({ works, open, paused, playerOpen, showPlay, onSel
           i={i}
           n={n}
           from={from}
-          open={open}
+          open={spillOpen}
           paused={paused}
           focused={i === focusedIndex}
           delay={delays[i] ?? i * STAGGER}
@@ -877,4 +978,57 @@ export function WorksSpiral3D({ works, open, paused, playerOpen, showPlay, onSel
       ))}
     </>
   );
+}
+
+// Precompile the spiral's tile + bezel shader programs during idle, before the
+// gallery is ever opened. WebGL compiles a program synchronously the first time a
+// material renders — doing it here, into a throwaway offscreen scene, moves that
+// main-thread stall off the moment the folder opens. three caches programs by their
+// shader source + renderer state, so the real tiles reuse what we compile here.
+// Mounted once alongside the scene (see MartinScene), so it warms on 3D-bundle load.
+export function ShaderPrewarm() {
+  const gl = useThree((s) => s.gl);
+  const camera = useThree((s) => s.camera);
+  useEffect(() => {
+    let cancelled = false;
+    const run = () => {
+      if (cancelled) return;
+      const geoms = makeConformGeoms();
+      const tex = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1);
+      tex.needsUpdate = true;
+      const tileMat = makeTileMaterial(tex);
+      const bezelMat = makeBezelMaterial();
+      const scene = new THREE.Scene();
+      scene.add(new THREE.Mesh(geoms.frontGeo, tileMat));
+      scene.add(new THREE.Mesh(geoms.bezelGeo, bezelMat));
+      const done = () => {
+        geoms.frontGeo.dispose();
+        geoms.bezelGeo.dispose();
+        tileMat.dispose();
+        bezelMat.dispose();
+        tex.dispose();
+      };
+      const maybe = (gl as unknown as {
+        compileAsync?: (s: THREE.Scene, c: THREE.Camera) => Promise<unknown>;
+      }).compileAsync?.(scene, camera);
+      if (maybe && typeof maybe.then === 'function') maybe.then(done).catch(done);
+      else {
+        gl.compile(scene, camera);
+        done();
+      }
+    };
+    const ric = (window as unknown as {
+      requestIdleCallback?: (cb: () => void) => number;
+    }).requestIdleCallback;
+    const handle = ric ? ric(run) : window.setTimeout(run, 200);
+    return () => {
+      cancelled = true;
+      const cic = (window as unknown as {
+        cancelIdleCallback?: (h: number) => void;
+      }).cancelIdleCallback;
+      if (ric && cic) cic(handle);
+      else window.clearTimeout(handle as number);
+    };
+  }, [gl, camera]);
+  return null;
 }
