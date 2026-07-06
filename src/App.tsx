@@ -187,6 +187,26 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [windowState.type]);
 
+  // Mobile: a tap anywhere outside the info panel / play button closes the detail
+  // view back to the spiral. Phones have no Esc key and the X is a small target, so
+  // tap-to-dismiss is the natural gesture. Taps on the panel (its links + Player
+  // button), the X, or the 3D play button are left to those controls.
+  useEffect(() => {
+    if (!isMobile || windowState.type !== 'detail') return;
+    const onClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('.detail-panel, .detail-close, .tile-play')) return;
+      setWindowState({ type: 'finder' });
+    };
+    // Attach on the next tick so the very tap that opened the detail view (its
+    // trailing click) doesn't immediately close it again.
+    const id = window.setTimeout(() => window.addEventListener('click', onClick), 0);
+    return () => {
+      window.clearTimeout(id);
+      window.removeEventListener('click', onClick);
+    };
+  }, [isMobile, windowState.type]);
+
   // Drive the works cloud lifecycle off windowState. Opening the folder (finder /
   // its video) keeps it 'open'; returning to rest flips it to 'closing' so the
   // files fly back into the folder before unmounting; switching to another window
