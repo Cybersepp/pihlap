@@ -898,6 +898,9 @@ export function WorksSpiral3D({ works, isMobile = false, open, paused, playerOpe
 
     const onKey = (e: KeyboardEvent) => {
       if (!open) return;
+      // Ctrl/Cmd + keys are reserved for top-level icon switching (see App), so
+      // never wind the helix or open here when a modifier is held.
+      if (e.ctrlKey || e.metaKey) return;
       // Enter walks the same path as clicking: first press opens the detail view,
       // a second press (detail state → showPlay) starts the DOM player.
       if (e.key === 'Enter') {

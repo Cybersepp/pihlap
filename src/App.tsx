@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { CSSProperties, lazy, Suspense, useEffect, useReducer, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import './styles.css';
 import { IconClickOrigin } from './components/DesktopIcon';
@@ -9,10 +9,13 @@ import type { SceneIcon } from './three/DesktopIcons3D';
 import type { Panel3DSpec } from './three/MartinScene';
 import {
   GALLERY,
+  MODEL,
   POSES,
   POSES_MOBILE,
   FOCUS_SMOOTH_TIME,
   getDetailPoseFromWorld,
+  onModelRestChange,
+  restRiseScreenFraction,
   type CameraTarget,
 } from './three/poses';
 import { works, Work } from './data/works';
@@ -39,6 +42,9 @@ type WindowState =
   | { type: 'readme' };
 
 type SelectedIcon = 'works' | 'contact' | 'readme' | null;
+
+// Ordered left→right to match the desktop icon row (see sceneIcons below).
+const ICON_ORDER: Exclude<SelectedIcon, null>[] = ['works', 'contact', 'readme'];
 
 const focusKeyFor = (workId: string) => `focus:${workId}`;
 
@@ -89,6 +95,11 @@ export default function App() {
     };
   }, []);
 
+  // Re-render when the dev panel edits MODEL.restRise, so the signature's screen
+  // offset (computed below) tracks Martin's lift live. No-op in production.
+  const [, bumpRest] = useReducer((c) => c + 1, 0);
+  useEffect(() => onModelRestChange(bumpRest), []);
+
   function openWindow(icon: SelectedIcon) {
     // Click on the currently-selected icon toggles it closed. The works cloud has
     // no window chrome / close button, so the folder icon is its toggle too.
@@ -137,6 +148,31 @@ export default function App() {
     setSelectedIcon(null);
     setWindowState({ type: 'none' });
   }
+
+  // Ctrl/Cmd + arrow switches between the top-level icons, wrapping around. Works
+  // from rest (opens the picked one) and while any window is open (jumps straight
+  // to the neighbour). Plain arrows stay reserved for winding the works spiral.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      let dir = 0;
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') dir = 1;
+      else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') dir = -1;
+      else return;
+      e.preventDefault();
+      const len = ICON_ORDER.length;
+      setSelectedIcon((cur) => {
+        const at = cur ? ICON_ORDER.indexOf(cur) : -1;
+        const next = ICON_ORDER[at < 0 ? (dir === 1 ? 0 : len - 1) : (at + dir + len) % len];
+        setWindowState(
+          next === 'works' ? { type: 'finder' } : { type: next },
+        );
+        return next;
+      });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   // Esc steps back one level: video → gallery, gallery/text → rest.
   useEffect(() => {
@@ -328,7 +364,16 @@ export default function App() {
       {/* Intro flourish: the name draws itself while the 3D bundle streams in, then
           settles to a faint backdrop behind the figure. On mobile the SVG scales
           down via .signature-intro__svg's media query. */}
-      <SignatureIntro key={`intro-${introRun}`} modelReady={modelReady} dismissed={introHidden} />
+      <SignatureIntro
+        key={`intro-${introRun}`}
+        modelReady={modelReady}
+        dismissed={introHidden}
+        // Lift the name by the screen projection of MODEL.restRise so it tracks the
+        // figure. Negative translateY = up; restRiseScreenFraction is +up.
+        style={
+          { '--sig-rise': `${-restRiseScreenFraction(MODEL.restRise) * viewport.height}px` } as CSSProperties
+        }
+      />
 
       {/* 3D Martin + world-anchored icons + (while a window is open) its 3D panel. */}
       <Suspense fallback={null}>

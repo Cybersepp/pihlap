@@ -1,54 +1,76 @@
-import { useEffect, useState } from 'react';
-import { motion, usePresence } from 'framer-motion';
+import { Fragment, useEffect } from 'react';
+import { motion, usePresence, useReducedMotion, type Variants } from 'framer-motion';
 import { Work } from '../data/works';
-import { useScramble } from '../lib/scramble';
-
-// A run of text that scrambles itself in on mount and back out when `active`
-// flips false, matching the spiral title's scramble language. Different speeds
-// per field give a staggered decode/encode. `delayMs` holds the field fully
-// scrambled before it starts decoding, so it can reveal after earlier fields.
-function Scramble({
-  as: Tag = 'span',
-  text,
-  className,
-  charsPerSec,
-  active = true,
-  href,
-  delayMs = 0,
-}: {
-  as?: 'span' | 'p' | 'h2' | 'a';
-  text: string;
-  className?: string;
-  charsPerSec?: number;
-  active?: boolean;
-  href?: string;
-  delayMs?: number;
-}) {
-  // Gate the decode start; on exit (active false) scramble out immediately.
-  const [started, setStarted] = useState(delayMs === 0);
-  useEffect(() => {
-    if (!active || started) return;
-    const id = window.setTimeout(() => setStarted(true), delayMs);
-    return () => window.clearTimeout(id);
-  }, [active, started, delayMs]);
-  const decoded = useScramble(text, active && started, charsPerSec, true);
-  if (Tag === 'a') {
-    return (
-      <a className={className} href={href} target="_blank" rel="noreferrer">
-        {decoded}
-      </a>
-    );
-  }
-  return <Tag className={className}>{decoded}</Tag>;
-}
 
 // DOM overlay for the "detail" state: a right-hand panel with the work's metadata
 // and external links (YouTube / Vimeo). The 3D tile expansion, background spotlight,
 // and the play affordance all live in the WebGL scene (see WorksSpiral3D); this is
 // just the chrome on top of the canvas.
-// Per-field scramble speeds (chars/sec). Reused to size the scramble-out delay
-// before the overlay is allowed to unmount.
-const FIELD_SPEED = { title: 22, meta: 46, desc: 120 } as const;
+//
+// Reveal language: the title does a cinematic clip-wipe; every text field below it
+// (meta, client, description, links) shares ONE calm treatment — words fade + drift
+// + sharpen (de-blur) in a gentle left-to-right stagger, cascading down the panel.
+
+// Per-word enter/exit used by every text field, so the panel reads as one motion.
+function wordVariants(reduce: boolean): Variants {
+  return {
+    hide: {
+      opacity: 0,
+      y: reduce ? 0 : 6,
+      filter: reduce ? 'blur(0px)' : 'blur(4px)',
+    },
+    show: {
+      opacity: 1,
+      y: 0,
+      filter: 'blur(0px)',
+      transition: { duration: reduce ? 0 : 0.5, ease: [0.16, 1, 0.3, 1] },
+    },
+  };
+}
+
+// A line/paragraph whose words stagger in (and reverse on exit). Words stay
+// inline-block units separated by real spaces so long text still wraps. `delayMs`
+// holds the whole field before its words begin, letting fields cascade in order.
+function WordReveal({
+  as = 'p',
+  text,
+  className,
+  active,
+  delayMs = 0,
+}: {
+  as?: 'p' | 'span';
+  text: string;
+  className?: string;
+  active: boolean;
+  delayMs?: number;
+}) {
+  const reduce = useReducedMotion() ?? false;
+  const words = text.split(' ');
+
+  const container: Variants = {
+    show: {
+      transition: { staggerChildren: reduce ? 0 : 0.018, delayChildren: delayMs / 1000 },
+    },
+    hide: {
+      transition: { staggerChildren: 0.006, staggerDirection: -1 },
+    },
+  };
+  const word = wordVariants(reduce);
+  const Tag = as === 'span' ? motion.span : motion.p;
+
+  return (
+    <Tag className={className} variants={container} initial="hide" animate={active ? 'show' : 'hide'}>
+      {words.map((w, i) => (
+        <Fragment key={i}>
+          <motion.span className="word" variants={word}>
+            {w}
+          </motion.span>
+          {i < words.length - 1 ? ' ' : ''}
+        </Fragment>
+      ))}
+    </Tag>
+  );
+}
 
 export function WorkDetailOverlay({
   work,
@@ -59,28 +81,42 @@ export function WorkDetailOverlay({
 }) {
   const [isPresent, safeToRemove] = usePresence();
   const active = isPresent;
+  const reduce = useReducedMotion() ?? false;
 
-  // Links reveal last: hold them scrambled until the slowest text field has
-  // finished decoding, then start their own scramble-in.
   const meta = `${work.location} · ${work.year}`;
-  const linkDelayMs =
-    Math.max(
-      work.title.length / FIELD_SPEED.title,
-      meta.length / FIELD_SPEED.meta,
-      (work.client?.length ?? 0) / FIELD_SPEED.meta,
-      work.description.length / FIELD_SPEED.desc,
-    ) * 1000;
 
-  // On exit, keep the overlay mounted long enough for the longest field to churn
-  // back into noise, then release it. Slowest field governs the hold.
+  // Cascade delays (ms) — each field waits a beat longer than the one above it so
+  // the panel assembles top-to-bottom: title wipe → meta → client → description →
+  // links. Links come last, after the description's words have finished landing.
+  const metaDelay = 200;
+  const clientDelay = 340;
+  const descDelay = work.client ? 500 : 400;
+  const linkDelay = descDelay + work.description.split(' ').length * 18 + 500;
+
+  // On exit, keep the overlay mounted long enough for every field to fade back out
+  // before it's released.
   useEffect(() => {
     if (isPresent) return;
-    const id = window.setTimeout(() => safeToRemove?.(), linkDelayMs + 80);
+    const id = window.setTimeout(() => safeToRemove?.(), linkDelay + 120);
     return () => window.clearTimeout(id);
-  }, [isPresent, linkDelayMs, safeToRemove]);
+  }, [isPresent, linkDelay, safeToRemove]);
+
+  const link = wordVariants(reduce);
 
   return (
-    <motion.div className="detail-overlay">
+    <>
+      {/* Close lives OUTSIDE .detail-overlay's stacking context (and its scroll
+          clip) so it can sit above the dev tuning panels — otherwise, in `npm run
+          dev`, RibbonControls (z 1000, top-right) covers it and eats the click. */}
+      <button
+        className="detail-close"
+        onClick={onClose}
+        aria-label="Close"
+        style={{ opacity: active ? 1 : 0, transition: 'opacity 200ms ease' }}
+      >
+        ✕
+      </button>
+      <motion.div className="detail-overlay">
       {/* Right-hand metadata panel. The play affordance now lives in the 3D scene,
           pinned to the curved tile (see WorksSpiral3D). */}
       <motion.aside
@@ -89,51 +125,58 @@ export function WorkDetailOverlay({
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.45, ease: 'easeOut', delay: 0.05 }}
       >
-        <button
-          className="detail-close"
-          onClick={onClose}
-          aria-label="Close"
-          style={{ opacity: active ? 1 : 0, transition: 'opacity 200ms ease' }}
+        {/* Title: cinematic clip-wipe reveal (no scramble — a proportional display
+            face jitters horizontally under scramble; the wipe also draws in the
+            hairline rule as it lands). */}
+        <motion.h2
+          className="detail-title"
+          initial={{ clipPath: 'inset(0 0 100% 0)', opacity: 0, y: 10 }}
+          animate={
+            active
+              ? { clipPath: 'inset(0 0 0% 0)', opacity: 1, y: 0 }
+              : { clipPath: 'inset(0 0 100% 0)', opacity: 0, y: 10 }
+          }
+          transition={{ duration: reduce ? 0 : 0.6, ease: [0.16, 1, 0.3, 1], delay: active ? 0.12 : 0 }}
         >
-          ✕
-        </button>
-        <Scramble as="h2" className="detail-title" text={work.title} charsPerSec={FIELD_SPEED.title} active={active} />
-        <Scramble
-          as="p"
-          className="detail-meta"
-          text={meta}
-          charsPerSec={FIELD_SPEED.meta}
-          active={active}
-        />
+          {work.title}
+        </motion.h2>
+        <WordReveal className="detail-meta" text={meta} active={active} delayMs={metaDelay} />
         {work.client && (
-          <Scramble as="p" className="detail-meta detail-client" text={work.client} charsPerSec={FIELD_SPEED.meta} active={active} />
+          <WordReveal className="detail-meta detail-client" text={work.client} active={active} delayMs={clientDelay} />
         )}
-        <Scramble as="p" className="detail-desc" text={work.description} charsPerSec={FIELD_SPEED.desc} active={active} />
-        <div className="detail-actions" style={{ opacity: active ? 1 : 0, transition: 'opacity 200ms ease' }}>
+        <WordReveal className="detail-desc" text={work.description} active={active} delayMs={descDelay} />
+        <div className="detail-actions">
           {work.youtubeUrl && (
-            <Scramble
-              as="a"
+            <motion.a
               className="detail-link"
               href={work.youtubeUrl}
-              text="YouTube ↗"
-              charsPerSec={FIELD_SPEED.meta}
-              active={active}
-              delayMs={linkDelayMs}
-            />
+              target="_blank"
+              rel="noreferrer"
+              variants={link}
+              initial="hide"
+              animate={active ? 'show' : 'hide'}
+              transition={{ duration: reduce ? 0 : 0.5, ease: [0.16, 1, 0.3, 1], delay: active ? linkDelay / 1000 : 0 }}
+            >
+              YouTube ↗
+            </motion.a>
           )}
           {work.vimeoUrl && (
-            <Scramble
-              as="a"
+            <motion.a
               className="detail-link"
               href={work.vimeoUrl}
-              text="Vimeo ↗"
-              charsPerSec={FIELD_SPEED.meta}
-              active={active}
-              delayMs={linkDelayMs}
-            />
+              target="_blank"
+              rel="noreferrer"
+              variants={link}
+              initial="hide"
+              animate={active ? 'show' : 'hide'}
+              transition={{ duration: reduce ? 0 : 0.5, ease: [0.16, 1, 0.3, 1], delay: active ? (linkDelay + 90) / 1000 : 0 }}
+            >
+              Vimeo ↗
+            </motion.a>
           )}
         </div>
       </motion.aside>
-    </motion.div>
+      </motion.div>
+    </>
   );
 }

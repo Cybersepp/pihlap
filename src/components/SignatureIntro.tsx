@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { CSSProperties, ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 
 // The intro flourish: "Martin Pihlap" is drawn on over the blank desktop while the
@@ -36,7 +36,17 @@ const prefersReducedMotion =
 type Stroke = { d: string; width: number };
 type SigData = { viewBox: string; filled: string[]; strokes: Stroke[] };
 
-export function SignatureIntro({ modelReady, dismissed }: { modelReady: boolean; dismissed: boolean }) {
+export function SignatureIntro({
+  modelReady,
+  dismissed,
+  style,
+}: {
+  modelReady: boolean;
+  dismissed: boolean;
+  /** Extra style on the layer — App passes a `--sig-rise` var so the name tracks
+   *  MODEL.restRise and lifts with the 3D figure. */
+  style?: CSSProperties;
+}) {
   const [data, setData] = useState<SigData | null>(null);
   const strokeRefs = useRef<(SVGPathElement | null)[]>([]);
   // Per-stroke {delay, duration} in seconds, from measured path lengths.
@@ -152,6 +162,7 @@ export function SignatureIntro({ modelReady, dismissed }: { modelReady: boolean;
     <motion.div
       className="signature-intro"
       aria-hidden="true"
+      style={style}
       animate={
         settled
           ? { opacity: BACKDROP_OPACITY, filter: 'drop-shadow(0 0 0px rgba(255,140,60,0))' }

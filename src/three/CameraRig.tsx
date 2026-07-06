@@ -99,6 +99,10 @@ export function CameraRig({
   onSettleRef.current = onSettle;
   // The active hand-driven ease-in-out swing (null when idle / spring-driven).
   const swing = useRef<Swing | null>(null);
+  // Ref-mirror so the controlstart listener reads the current value without
+  // re-subscribing each toggle.
+  const orbitEnabledRef = useRef(orbitEnabled);
+  orbitEnabledRef.current = orbitEnabled;
 
   const { key, spec, smoothTime, ease } = target;
 
@@ -107,6 +111,24 @@ export function CameraRig({
     registerCameraControls(controls.current);
     return () => registerCameraControls(null);
   }, []);
+
+  // When orbit is enabled (contact / readme), a manual grab supersedes any auto
+  // ease-in-out swing so the user can orbit *immediately* — otherwise the swing's
+  // per-frame setLookAt keeps snapping the camera back until it settles. Guarded
+  // by orbitEnabled so the rest / gallery swings (where gestures are off) still
+  // run to completion.
+  useEffect(() => {
+    const c = controls.current;
+    if (!c) return;
+    const onGrab = () => {
+      if (!orbitEnabledRef.current || !swing.current) return;
+      swing.current.cancelled = true;
+      swing.current = null;
+      onSettleRef.current?.(key);
+    };
+    c.addEventListener('controlstart', onGrab);
+    return () => c.removeEventListener('controlstart', onGrab);
+  }, [key]);
 
   useEffect(() => {
     const c = controls.current;

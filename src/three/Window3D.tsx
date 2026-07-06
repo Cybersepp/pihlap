@@ -38,8 +38,8 @@ export function Window3D({
   const scale = useRef(0.001);
   const [showFront, setShowFront] = useState(true);
   useTextPanelTuning();
-  // Viewport-aware Html scale so the window never overflows a narrow phone. Reads
-  // s.size, so it re-derives on resize (TEXT_PANEL.scale caps it on big screens).
+  // Viewport-aware Html scale so the window fills a constant fraction of the screen
+  // at any aspect. Reads s.size, so it re-derives on resize (see TEXT_PANEL_LAYOUT).
   const size = useThree((s) => s.size);
   const { scale: htmlScale } = textPanelLayout(size.width, size.height, isMobile);
 

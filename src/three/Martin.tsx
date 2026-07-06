@@ -134,7 +134,10 @@ export function Martin({
     g.updateWorldMatrix(true, true);
     const b = new THREE.Box3().setFromObject(g);
     const worldSize = modelRestWorldSize(aspect, isMobile);
-    if (worldSize > 0) setModelFeetRatio(b.min.y / worldSize);
+    // Subtract the group's own Y so the published feet ratio is the figure's
+    // INTRINSIC bottom, independent of the live hover / MODEL.restRise offset — the
+    // icon row stays put when Martin is lifted, and a resize can't fold the rise in.
+    if (worldSize > 0) setModelFeetRatio((b.min.y - g.position.y) / worldSize);
     if (!primed.current) {
       primed.current = true;
       reveal.current = prefersReducedMotion ? 1 : 0;
@@ -156,7 +159,7 @@ export function Martin({
     // tuning panel applies live. clock accumulates clamped dt (framerate-independent).
     clock.current += d;
     const t = clock.current;
-    groupRef.current?.position.setY(Math.sin(t * MODEL.hoverSpeed) * MODEL.hoverAmplitude);
+    groupRef.current?.position.setY(MODEL.restRise + Math.sin(t * MODEL.hoverSpeed) * MODEL.hoverAmplitude);
     if (rotRef.current) {
       rotRef.current.rotation.y = MODEL.restYaw;
       rotRef.current.rotation.z =

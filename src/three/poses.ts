@@ -52,7 +52,7 @@ export const GALLERY_CENTER: [number, number, number] = [0, 1, 0];
 // Mobile sits a touch farther back so the helix isn't clipped on a narrow viewport.
 export const POSES: Record<'rest' | 'gallery', PoseSpec> = {
   rest: { position: [0, 0.0, 7], target: [0, 0.0, 0] },
-  gallery: { position: [0, 0.2, -7.8], target: GALLERY_CENTER },
+  gallery: { position: [0.55, 0.2, -7.8], target: GALLERY_CENTER },
 };
 
 export const POSES_MOBILE: Record<'rest' | 'gallery', PoseSpec> = {
@@ -100,9 +100,15 @@ export const MODEL = {
   hoverSpeed: 1.2,
   /** Idle hover: subtle tilt-sway amplitude (radians) for an organic float. */
   swayAmplitude: 0.018,
+  /** Rest-pose vertical lift of the figure, in world units (added on top of the
+   *  hover bob). Positive raises Martin higher in frame before anything is opened.
+   *  The DOM signature behind him tracks this via restRiseScreenFraction(), so both
+   *  move together. Icons stay anchored to their intrinsic feet, so they don't ride
+   *  up with him. */
+  restRise: 0.46,
   /** Icon row height: fraction of his rest world size ABOVE his feet (0 = at his
    *  feet, higher = up toward his legs/lap, ~level with him). */
-  iconRise: 0.15,
+  iconRise: 0.08,
   /** Icon row depth: world Z offset (negative = set back behind his legs). */
   iconDepth: 1,
 };
@@ -144,6 +150,15 @@ function restFrustumHalf(aspect: number): { halfW: number; halfH: number } {
   const restDist = POSES.rest.position[2];
   const halfH = restDist * Math.tan((SCENE_FOV * Math.PI) / 360);
   return { halfW: halfH * aspect, halfH };
+}
+
+// A world-Y offset R at the rest plane (z = 0) projects to this fraction of the
+// viewport HEIGHT on screen (aspect-independent — vertical FOV is fixed). Lets the
+// DOM signature translate by the same screen amount MODEL.restRise lifts the 3D
+// figure, so the name behind Martin stays locked to him. Positive = up.
+export function restRiseScreenFraction(rise: number): number {
+  const { halfH } = restFrustumHalf(1);
+  return rise / (2 * halfH);
 }
 
 // World size for the Martin's largest dimension at rest, so it occupies a fixed
@@ -265,15 +280,44 @@ export const TEXT_PANEL = {
   /** Distance pushed back from the model along the camera→center ray. */
   pushback: 1.6,
   /** Screen-right slide (world units). Negative = left on screen. */
-  shiftRight: 0.1,
+  shiftRight: -0.05,
   /** Screen-up slide (world units). Positive = up on screen. */
   shiftUp: 0.55,
-  /** Html `transform` scale for the whole window. drei applies a hidden ÷40
-   *  factor, so on-screen world width ≈ width × scale / 40. */
-  scale: 0.28,
-  /** Window footprint in CSS px, scaled into the world by `scale`. */
+  /** Window footprint in CSS px. The on-screen size is NOT a fixed world scale —
+   *  textPanelLayout() derives the drei Html scale each frame so the panel fills a
+   *  target fraction of the viewport (see TEXT_PANEL_LAYOUT), staying the same
+   *  proportion of the screen at every aspect. */
   width: 480,
   height: 380,
+};
+
+// Target on-screen size of the text window as a fraction of the viewport, solved
+// live from the gallery frustum by textPanelLayout(). This is what makes the panel
+// screen-relative instead of a fixed world size: the camera sits at a fixed
+// distance/FOV, so the frustum's world size depends only on the viewport ASPECT —
+// a flat scale therefore reads big on a narrow phone and tiny on a wide/ultrawide
+// screen. Targeting a fraction instead keeps the panel a constant proportion of the
+// frame at any aspect. Wide (desktop) aspects get a smaller, centred share; narrow
+// (phone/portrait) aspects a larger one (readability on a small screen). The two are
+// blended SMOOTHLY by aspect between wideAspect and narrowAspect — NOT switched on
+// the isMobile flag — so a live resize grows/shrinks continuously with no jump at
+// the mobile breakpoint. The panel is sized to the smaller of the two axis
+// fractions, so it always fits within both. Mirrors DETAIL_LAYOUT.
+export const TEXT_PANEL_LAYOUT = {
+  /** Wide/desktop aspects: fraction of viewport WIDTH the panel targets. */
+  widthFraction: 0.4,
+  /** Wide/desktop aspects: fraction of viewport HEIGHT the panel targets. */
+  heightFraction: 0.63,
+  /** Narrow/phone aspects: wider WIDTH share — the small screen needs the panel to
+   *  dominate. Blended toward as aspect shrinks past wideAspect → narrowAspect. */
+  widthFractionNarrow: 0.76,
+  /** Narrow/phone aspects: HEIGHT share. */
+  heightFractionNarrow: 0.72,
+  /** Aspect (w/h) at/above which the WIDE fractions fully apply. */
+  wideAspect: 1.5,
+  /** Aspect (w/h) at/below which the NARROW fractions fully apply. Between the two,
+   *  a smoothstep blend — the seam that used to jump at the 768px isMobile flip. */
+  narrowAspect: 0.6,
 };
 
 // World position of the text window, derived LIVE from TEXT_PANEL so dev-panel
@@ -321,6 +365,20 @@ export function onIconLayoutChange(cb: () => void): () => void {
 }
 export function notifyIconLayoutChange(): void {
   _iconLayoutListeners.forEach((cb) => cb());
+}
+
+// Same pub/sub for MODEL.restRise: Martin reads it per frame (live on its own), but
+// the DOM signature's screen offset is a React-computed style in App, so a dev-panel
+// edit needs an App re-render to move the name with him. No-op in production.
+const _modelRestListeners = new Set<() => void>();
+export function onModelRestChange(cb: () => void): () => void {
+  _modelRestListeners.add(cb);
+  return () => {
+    _modelRestListeners.delete(cb);
+  };
+}
+export function notifyModelRestChange(): void {
+  _modelRestListeners.forEach((cb) => cb());
 }
 
 // ── 3D works cloud ──────────────────────────────────────────────────────────
@@ -372,7 +430,7 @@ export const SPIRAL = {
   /** Axis the ribbon arches around. Initialised to GALLERY_CENTER but kept as its
    *  OWN array so the ribbon can be repositioned independently of the gallery
    *  camera's look-at target (move this to slide the ribbon within the frame). */
-  center: [0.1, 2.3, 3] as [number, number, number],
+  center: [0.1, 2.6, 3] as [number, number, number],
   /** Rigid rotation of the whole ribbon about its center, Euler radians [x, y, z].
    *  Lets the arch be tipped/turned to face the gallery camera. Applied uniformly
    *  to every tile's position AND orientation so the band stays conformed. */
@@ -562,10 +620,10 @@ export const DETAIL = {
   /** Manual NUDGE along the camera's screen-right axis, added on top of the
    *  responsive seating from detailLayout(). Negative = left. Leave 0 to trust the
    *  auto layout; use it to fine-tune the framing. */
-  pan: 0,
+  pan: 0.75,
   /** Manual NUDGE along the camera's screen-up axis, added on top of the responsive
    *  seating. Positive = up. Leave 0 to trust the auto layout. */
-  panY: 0,
+  panY: 0.2,
   /** Radians the opening tile yaws to the right as it expands. Shared with the
    *  tile flourish AND the camera reframe (via yawFollow). Flip to turn the other
    *  way. */
@@ -609,15 +667,20 @@ export const DETAIL_LAYOUT = {
   portraitAspect: 0.95,
   /** Landscape: fraction of viewport WIDTH reserved for the tile (rest = panel). */
   landscapeTileWidth: 0.6,
-  /** Landscape: fraction of its region the tile fills (smaller ⇒ camera further back). */
-  landscapeFill: 0.7,
+  /** Landscape: fraction of its region the tile fills (smaller ⇒ camera further back
+   *  ⇒ the clicked tile reads SMALLER on screen). This is the main lever for the
+   *  open-tile size. */
+  landscapeFill: 0.5,
   /** Portrait: fraction of viewport HEIGHT reserved for the tile (rest = panel). */
-  portraitTileHeight: 0.56,
-  /** Portrait: fraction of its region the tile fills. */
-  portraitFill: 0.9,
-  /** Clamp so an extreme viewport never parks the camera absurdly near/far. */
+  portraitTileHeight: 0.4,
+  /** Portrait: fraction of its region the tile fills (smaller ⇒ smaller open tile). */
+  portraitFill: 0.6,
+  /** Clamp so an extreme viewport never parks the camera absurdly near/far. Kept
+   *  generous on the far end: a narrow portrait phone with a small *Fill needs the
+   *  camera well back to actually shrink the tile to target — too low a cap leaves
+   *  the tile stuck oversized and spilling off a phone. */
   minDistance: 3,
-  maxDistance: 10,
+  maxDistance: 25,
 };
 
 const _TAN_HALF_FOV = Math.tan((SCENE_FOV * Math.PI) / 360);
@@ -719,8 +782,12 @@ export function getDetailPoseFromWorld(
   const a = GALLERY.faceY + DETAIL.tileYaw * DETAIL.yawFollow;
   const layout = detailLayout(width, height);
   const f = getFocusPoseFromWorld(world, width, height);
-  const right = layout.panRight + DETAIL.pan;
-  const up = layout.panUp + DETAIL.panY;
+  // The manual pan/panY nudges were tuned for the LANDSCAPE composition; as flat
+  // world-unit shifts they blow the tile off a narrow portrait phone. In portrait
+  // (panelBottom) trust the centered auto-fit — panRight is 0 there, so the tile
+  // stays centred and within bounds — and skip the landscape nudge.
+  const right = layout.panRight + (layout.panelBottom ? 0 : DETAIL.pan);
+  const up = layout.panUp + (layout.panelBottom ? 0 : DETAIL.panY);
   const rx = Math.cos(a) * right;
   const rz = -Math.sin(a) * right;
   return {
@@ -731,11 +798,12 @@ export function getDetailPoseFromWorld(
 
 // ── Responsive 3D text panel (contact.txt / readme.txt) ───────────────────────
 // The text window is an <Html transform> sheet: its on-screen world width is
-// width × scale / 40, then projected by the gallery camera. On big screens we cap
-// the scale at TEXT_PANEL.scale (the tuned look); on small/portrait viewports we
-// shrink the scale so the panel always fits within ~86% width / ~82% height of the
-// frame instead of overflowing. Derived from the actual gallery camera distance,
-// so it adapts continuously to any screen.
+// width × scale / 40, then projected by the gallery camera. The scale is solved so
+// the panel fills a TARGET FRACTION of the viewport (TEXT_PANEL_LAYOUT) rather than
+// a fixed world size — so it stays the same proportion of the screen at every aspect
+// (a phone, a laptop, an ultrawide) and never shrinks to a stamp on a wide frustum.
+// Sized to the smaller of the width/height fractions so it always fits both axes.
+// Derived from the actual gallery camera distance, so it adapts continuously.
 const _tpCenter = new THREE.Vector3();
 export interface TextPanelLayout {
   width: number;
@@ -749,8 +817,16 @@ export function textPanelLayout(width: number, height: number, isMobile: boolean
   const dist = Math.hypot(cam[0] - pc.x, cam[1] - pc.y, cam[2] - pc.z) || 1;
   const halfH = dist * _TAN_HALF_FOV;
   const halfW = halfH * aspect;
-  const scaleForW = (0.86 * 2 * halfW * 40) / TEXT_PANEL.width;
-  const scaleForH = (0.82 * 2 * halfH * 40) / TEXT_PANEL.height;
-  const scale = Math.min(TEXT_PANEL.scale, scaleForW, scaleForH);
+  const L = TEXT_PANEL_LAYOUT;
+  // Blend the target fractions by aspect (0 = fully narrow/phone, 1 = fully wide/
+  // desktop), so the panel size changes continuously across a resize rather than
+  // stepping at the isMobile breakpoint. smoothstep clamps outside the two edges.
+  const wideness = THREE.MathUtils.smoothstep(aspect, L.narrowAspect, L.wideAspect);
+  const widthFrac = THREE.MathUtils.lerp(L.widthFractionNarrow, L.widthFraction, wideness);
+  const heightFrac = THREE.MathUtils.lerp(L.heightFractionNarrow, L.heightFraction, wideness);
+  const scaleForW = (widthFrac * 2 * halfW * 40) / TEXT_PANEL.width;
+  const scaleForH = (heightFrac * 2 * halfH * 40) / TEXT_PANEL.height;
+  // Smaller axis wins so the panel fits within BOTH the width and height targets.
+  const scale = Math.min(scaleForW, scaleForH);
   return { width: TEXT_PANEL.width, height: TEXT_PANEL.height, scale };
 }

@@ -3,14 +3,17 @@ import {
   POSES,
   SPIRAL,
   DETAIL,
+  DETAIL_LAYOUT,
   GLOW,
   MODEL,
   TEXT_PANEL,
+  TEXT_PANEL_LAYOUT,
   FOCUS_SMOOTH_TIME,
   getLastDetailWorld,
   getDetailPoseFromWorld,
   notifyTextPanelChange,
   notifyIconLayoutChange,
+  notifyModelRestChange,
 } from '../three/poses';
 import { applyPose } from '../three/liveCamera';
 import { DISSOLVE, GLITCH, replayDissolve, triggerGlitch } from '../three/materialSettings';
@@ -140,6 +143,35 @@ const DETAIL_CONTROLS: Ctl[] = [
   detail('yawFollow', 0, 1, 0.02, 'yawFollow'),
 ];
 
+// Responsive framing fractions (DETAIL_LAYOUT). *Fill governs the on-screen size of
+// the open tile — smaller ⇒ camera further back ⇒ smaller tile. Re-issues the pose
+// so the fit changes live. Dev runs at a wide aspect, so the landscape* sliders are
+// what you see live; edit portrait* by narrowing the window (or in poses.ts).
+const detailLayoutCtl = (
+  key: keyof typeof DETAIL_LAYOUT,
+  min: number,
+  max: number,
+  step: number,
+  label: string,
+): Ctl => ({
+  label,
+  min,
+  max,
+  step,
+  get: () => DETAIL_LAYOUT[key],
+  set: (v) => {
+    DETAIL_LAYOUT[key] = v;
+    reapplyDetail();
+  },
+});
+
+const DETAIL_LAYOUT_CONTROLS: Ctl[] = [
+  detailLayoutCtl('landscapeFill', 0.3, 1, 0.02, 'landscapeFill (tile size)'),
+  detailLayoutCtl('landscapeTileWidth', 0.3, 0.95, 0.02, 'landscapeTileWidth (region)'),
+  detailLayoutCtl('portraitFill', 0.3, 1, 0.02, 'portraitFill (tile size)'),
+  detailLayoutCtl('portraitTileHeight', 0.3, 0.9, 0.02, 'portraitTileHeight (region)'),
+];
+
 // Gallery glow (halo behind centered tile + overhead wash). Every field is read
 // fresh each frame by CenterGlow, so plain mutation applies live.
 const glow = (key: keyof typeof GLOW, min: number, max: number, step: number, label: string): Ctl => ({
@@ -223,13 +255,39 @@ const textPanel = (
   },
 });
 
+// The screen-fraction targets live on TEXT_PANEL_LAYOUT (not TEXT_PANEL). Dev runs
+// at a wide aspect, so these sliders tune the WIDE/desktop fractions live; edit the
+// *Narrow fractions + aspect edges in poses.ts directly. Same notify to re-render.
+const textLayout = (
+  key: keyof typeof TEXT_PANEL_LAYOUT,
+  min: number,
+  max: number,
+  step: number,
+  label: string,
+): Ctl => ({
+  label,
+  min,
+  max,
+  step,
+  get: () => TEXT_PANEL_LAYOUT[key],
+  set: (v) => {
+    TEXT_PANEL_LAYOUT[key] = v;
+    notifyTextPanelChange();
+  },
+});
+
 const TEXT_PANEL_CONTROLS: Ctl[] = [
   textPanel('shiftRight', -6, 6, 0.05, 'shiftRight (left/right)'),
   textPanel('shiftUp', -4, 4, 0.05, 'shiftUp (up/down)'),
   textPanel('pushback', 0, 6, 0.05, 'pushback (depth)'),
-  textPanel('scale', 0.05, 0.6, 0.005, 'scale (size)'),
   textPanel('width', 200, 900, 10, 'width (px)'),
   textPanel('height', 200, 900, 10, 'height (px)'),
+];
+
+// Desktop screen-fraction targets — separate object, copied under its own header.
+const TEXT_LAYOUT_CONTROLS: Ctl[] = [
+  textLayout('widthFraction', 0.1, 1, 0.01, 'widthFraction (screen w)'),
+  textLayout('heightFraction', 0.1, 1, 0.01, 'heightFraction (screen h)'),
 ];
 
 // The figure's facing + idle-float + swing choreography. Martin reads MODEL fresh
@@ -240,6 +298,7 @@ type ModelKey =
   | 'hoverAmplitude'
   | 'hoverSpeed'
   | 'swayAmplitude'
+  | 'restRise'
   | 'iconRise'
   | 'iconDepth';
 // Most MODEL fields are read per frame by Martin, so a plain mutation applies live.
@@ -268,12 +327,27 @@ const modelIcon = (key: ModelKey, min: number, max: number, step: number, label:
   },
 });
 
+// restRise lifts Martin live (per-frame read), but the DOM signature's offset is a
+// React style in App — notify it to re-render so the name rides up with him.
+const modelRest = (key: ModelKey, min: number, max: number, step: number, label: string): Ctl => ({
+  label,
+  min,
+  max,
+  step,
+  get: () => MODEL[key],
+  set: (v) => {
+    MODEL[key] = v;
+    notifyModelRestChange();
+  },
+});
+
 const MODEL_CONTROLS: Ctl[] = [
   model('restYaw', 0, Math.PI * 2, 0.02, 'restYaw (facing)'),
   model('swingDuration', 0.3, 3, 0.05, 'swingDuration (swing s)'),
   model('hoverAmplitude', 0, 0.4, 0.005, 'hoverAmplitude (float)'),
   model('hoverSpeed', 0, 2, 0.02, 'hoverSpeed (float rate)'),
   model('swayAmplitude', 0, 0.15, 0.002, 'swayAmplitude (tilt)'),
+  modelRest('restRise', -1, 2, 0.02, 'restRise (lift figure)'),
   modelIcon('iconRise', -0.5, 0.9, 0.01, 'iconRise (row height)'),
   modelIcon('iconDepth', -3, 1, 0.05, 'iconDepth (row behind)'),
 ];
@@ -381,6 +455,7 @@ export function RibbonControls() {
     const pos = RIBBON_POS_CONTROLS.map((c) => round(c.get()));
     const rot = RIBBON_ROT_CONTROLS.map((c) => round(c.get()));
     const det = DETAIL_CONTROLS.map((c) => `  ${c.label.split(' ')[0]}: ${round(c.get())},`);
+    const dly = DETAIL_LAYOUT_CONTROLS.map((c) => `  ${c.label.split(' ')[0]}: ${round(c.get())},`);
     const glw = GLOW_CONTROLS.map((c) => `  ${c.label.split(' ')[0]}: ${round(c.get())},`);
     const text =
       `// tuned ribbon values\n${lines.join('\n')}\n` +
@@ -388,6 +463,7 @@ export function RibbonControls() {
       `// SPIRAL.rotation\n[${rot.join(', ')}]\n` +
       `// POSES.gallery.position\n[${cam.join(', ')}]\n` +
       `// DETAIL\n${det.join('\n')}\n` +
+      `// DETAIL_LAYOUT\n${dly.join('\n')}\n` +
       `// GLOW\n${glw.join('\n')}`;
     navigator.clipboard?.writeText(text).then(
       () => {
@@ -435,6 +511,10 @@ export function RibbonControls() {
           {DETAIL_CONTROLS.map((c) => (
             <Slider key={c.label} ctl={c} onChange={force} />
           ))}
+          <div style={section}>detail framing (responsive)</div>
+          {DETAIL_LAYOUT_CONTROLS.map((c) => (
+            <Slider key={c.label} ctl={c} onChange={force} />
+          ))}
           <div style={section}>glow (gallery)</div>
           {GLOW_CONTROLS.map((c) => (
             <Slider key={c.label} ctl={c} onChange={force} />
@@ -455,13 +535,16 @@ export function TextWindowControls() {
 
   const copy = () => {
     const txt = TEXT_PANEL_CONTROLS.map((c) => `  ${c.label.split(' ')[0]}: ${round(c.get())},`);
-    navigator.clipboard?.writeText(`// TEXT_PANEL\n${txt.join('\n')}`).then(
-      () => {
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), 1200);
-      },
-      () => {},
-    );
+    const lay = TEXT_LAYOUT_CONTROLS.map((c) => `  ${c.label.split(' ')[0]}: ${round(c.get())},`);
+    navigator.clipboard
+      ?.writeText(`// TEXT_PANEL\n${txt.join('\n')}\n// TEXT_PANEL_LAYOUT (desktop)\n${lay.join('\n')}`)
+      .then(
+        () => {
+          setCopied(true);
+          window.setTimeout(() => setCopied(false), 1200);
+        },
+        () => {},
+      );
   };
 
   return (
@@ -481,6 +564,9 @@ export function TextWindowControls() {
       {open && (
         <div style={{ overflowY: 'auto', minHeight: 0 }}>
           {TEXT_PANEL_CONTROLS.map((c) => (
+            <Slider key={c.label} ctl={c} onChange={force} />
+          ))}
+          {TEXT_LAYOUT_CONTROLS.map((c) => (
             <Slider key={c.label} ctl={c} onChange={force} />
           ))}
         </div>
