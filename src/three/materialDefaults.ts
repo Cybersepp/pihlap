@@ -47,9 +47,9 @@ export const DISSOLVE = {
   edge: 0.3, // width of the glowing dissolve boundary
   pixel: 63, // voxel resolution (cells over the figure height) when blocky
   blocky: 0.68, // 0 = smooth noise flecks, 1 = full chunky pixel/voxel pop-in
-  glowR: 3, // edge glow color (>1 channels read as bloom on the dark clay)
-  glowG: 0.65,
-  glowB: 0,
+  glowR: 0.5, // edge glow color (>1 channels read as bloom on the dark clay)
+  glowG: 3,
+  glowB: 0.15,
 };
 
 // Occasional idle glitch knobs (live-tunable). Between bursts the figure is fully

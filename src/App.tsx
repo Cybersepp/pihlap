@@ -4,7 +4,7 @@ import './styles.css';
 import { IconClickOrigin } from './components/DesktopIcon';
 import { QuickTimeWindow } from './components/QuickTimeWindow';
 import { WorkDetailOverlay } from './components/WorkDetailOverlay';
-import { FolderIcon, TextDocIcon } from './components/Icons';
+import { FolderIcon } from './components/Icons';
 import type { SceneIcon } from './three/DesktopIcons3D';
 import type { Panel3DSpec } from './three/MartinScene';
 import {
@@ -50,12 +50,6 @@ const ICON_ORDER: Exclude<SelectedIcon, null>[] = ['works', 'contact', 'readme']
 
 const focusKeyFor = (workId: string) => `focus:${workId}`;
 
-// How long after a window closes (camera starting its swing back to rest) before
-// the signature remounts and begins drawing. Less than the camera's settle so the
-// ink is already flowing as Martin arrives; SignatureIntro's own START_DELAY_MS
-// adds the final beat before the first stroke lands.
-const INTRO_REDRAW_LEAD_MS = 450;
-
 export default function App() {
   const [windowState, setWindowState] = useState<WindowState>({ type: 'none' });
   const [selectedIcon, setSelectedIcon] = useState<SelectedIcon>(null);
@@ -73,10 +67,8 @@ export default function App() {
   const [viewport, setViewport] = useState(() => getViewportSize());
   // Flips true once the 3D figure's GLB has resolved — hands off from the intro draw.
   const [modelReady, setModelReady] = useState(false);
-  // Keys the intro so it remounts and redraws from scratch each return to rest.
-  const [introRun, setIntroRun] = useState(0);
-  // Erased state: true wipes the signature out and holds it hidden until the camera
-  // is back at the rest pose, at which point it remounts and redraws.
+  // Erased state: true wipes the signature out. The intro plays once on load and
+  // fades out as the figure arrives; it never redraws, so this only latches true.
   const [introHidden, setIntroHidden] = useState(false);
   // The camera target key the rig has actually finished settling into, or null
   // while a move is in progress. Used to delay revealing the video until the
@@ -301,22 +293,11 @@ export default function App() {
   // rest reverses it.
   const broken = windowState.type !== 'none';
 
-  // Erase the signature the instant any window opens.
+  // Erase the signature the instant any window opens (if it's somehow still showing
+  // before the model-load fade). Latches — the intro never redraws.
   useEffect(() => {
     if (broken) setIntroHidden(true);
   }, [broken]);
-
-  // Redraw a beat before the camera finishes returning to rest, so the ink is
-  // already flowing as Martin swings back into place rather than after he lands.
-  // Keyed off the close (broken→false) on a short lead rather than the settle.
-  useEffect(() => {
-    if (broken || !introHidden) return;
-    const t = window.setTimeout(() => {
-      setIntroHidden(false);
-      setIntroRun((r) => r + 1);
-    }, INTRO_REDRAW_LEAD_MS);
-    return () => window.clearTimeout(t);
-  }, [broken, introHidden]);
 
   // The DOM video only opens once the camera has actually arrived in front of the
   // focused tile (settledKey matches) — never early during the fly-in.
@@ -337,7 +318,16 @@ export default function App() {
     {
       id: 'contact',
       label: 'contact.txt',
-      glyph: <TextDocIcon />,
+      glyph: (
+        <img
+          src={`${import.meta.env.BASE_URL}contact.jpg`}
+          alt=""
+          width={56}
+          height={56}
+          draggable={false}
+          style={{ objectFit: 'cover', borderRadius: 8, display: 'block' }}
+        />
+      ),
       selected: selectedIcon === 'contact',
       onClick: () => openWindow('contact'),
     },
@@ -371,10 +361,9 @@ export default function App() {
       <div className={`studio${broken ? ' is-visible' : ''}`} aria-hidden="true" />
 
       {/* Intro flourish: the name draws itself while the 3D bundle streams in, then
-          settles to a faint backdrop behind the figure. On mobile the SVG scales
-          down via .signature-intro__svg's media query. */}
+          fades fully out as the figure arrives (plays once, never redraws). On mobile
+          the SVG scales down via .signature-intro__svg's media query. */}
       <SignatureIntro
-        key={`intro-${introRun}`}
         modelReady={modelReady}
         dismissed={introHidden}
         // Lift the name by the screen projection of MODEL.restRise so it tracks the

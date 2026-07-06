@@ -22,8 +22,9 @@ const MIN_DRAW_MS = 2200;
 const STROKE_GAP_MS = 30;
 // How fast the ink retracts when the signature is dismissed (quick un-write).
 const ERASE_MS = 180;
-// How faint the name sits once it settles behind the figure.
-const BACKDROP_OPACITY = 0.5;
+// The name fully fades out once it settles (after the figure arrives) — the intro
+// draw-on and loading smolder still play, but no signature lingers behind Martin.
+const BACKDROP_OPACITY = 0;
 // Ink-bleed (gooey) filter strength: blur radius spreads the ink, then the alpha
 // threshold re-sharpens it into wet, fused blobs where strokes meet.
 const INK_BLEED = 3;
@@ -101,16 +102,25 @@ export function SignatureIntro({
       return { delay: delay / 1000, duration: duration / 1000 };
     });
     setTimings(t);
-
-    // Mark the draw complete off a deterministic timer (the last stroke's finish).
-    const last = t[t.length - 1];
-    const totalMs = last ? (last.delay + last.duration) * 1000 : 0;
-    const id = window.setTimeout(() => setDrawComplete(true), prefersReducedMotion ? 0 : totalMs);
-    return () => window.clearTimeout(id);
   }, [data, timings]);
 
-  // Settle to the backdrop only once the draw has finished *and* the figure is ready;
-  // if the model is still loading, the finished name holds until it arrives.
+  // Mark the draw complete after the last stroke finishes. This lives in its OWN
+  // effect (keyed on `timings`, which is set exactly once) so setting `timings`
+  // doesn't tear the timer down. When this scheduling lived inside the measuring
+  // layout-effect above, the `timings` state change re-ran that effect and its
+  // cleanup cleared the timer — so drawComplete never fired and the name never faded.
+  useEffect(() => {
+    if (!timings) return;
+    const last = timings[timings.length - 1];
+    const totalMs = last ? (last.delay + last.duration) * 1000 : 0;
+    const id = window.setTimeout(() => setDrawComplete(true), totalMs);
+    return () => window.clearTimeout(id);
+  }, [timings]);
+
+  // Fade the signature out only once the draw has finished *and* the figure is
+  // ready. If the model loads mid-draw, the signature completes its full stroke
+  // sequence first, then fades; if the draw finishes before the model, it smolders
+  // (see `waiting`) until the figure arrives, then fades.
   useEffect(() => {
     if (drawComplete && modelReady) setSettled(true);
   }, [drawComplete, modelReady]);
