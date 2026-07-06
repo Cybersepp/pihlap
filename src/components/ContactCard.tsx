@@ -57,7 +57,7 @@ export function ContactCard() {
     <div className="contact">
       <div className="contact-header">
         <div className="contact-name">Martin Pihlap</div>
-        <div className="contact-role">Video Producer</div>
+        <div className="contact-role">Director</div>
       </div>
 
       <dl className="contact-rows">

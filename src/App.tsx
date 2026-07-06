@@ -4,7 +4,6 @@ import './styles.css';
 import { IconClickOrigin } from './components/DesktopIcon';
 import { QuickTimeWindow } from './components/QuickTimeWindow';
 import { WorkDetailOverlay } from './components/WorkDetailOverlay';
-import { FolderIcon } from './components/Icons';
 import type { SceneIcon } from './three/DesktopIcons3D';
 import type { Panel3DSpec } from './three/MartinScene';
 import {
@@ -311,7 +310,16 @@ export default function App() {
     {
       id: 'works',
       label: 'selected works',
-      glyph: <FolderIcon />,
+      glyph: (
+        <img
+          src={`${import.meta.env.BASE_URL}works.jpg`}
+          alt=""
+          width={56}
+          height={56}
+          draggable={false}
+          style={{ objectFit: 'cover', borderRadius: 8, display: 'block' }}
+        />
+      ),
       selected: selectedIcon === 'works',
       onClick: () => openWindow('works'),
     },
