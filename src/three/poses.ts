@@ -49,15 +49,16 @@ export const GALLERY_CENTER: [number, number, number] = [0, 1, 0];
 // -Z: a pure 180° flip is an ambiguous shortest-path for camera-controls (it
 // picks the swing direction by a coin flip), so this small offset forces the
 // camera to always swing through the icon side, both opening and closing.
-// Mobile sits a touch farther back so the helix isn't clipped on a narrow viewport.
 export const POSES: Record<'rest' | 'gallery', PoseSpec> = {
   rest: { position: [0, 0.0, 7], target: [0, 0.0, 0] },
   gallery: { position: [0.55, 0.2, -7.8], target: GALLERY_CENTER },
 };
 
+// Mobile matches desktop's X/Y framing, but sits a touch farther back (Z) so the
+// helix isn't clipped on a narrow portrait viewport.
 export const POSES_MOBILE: Record<'rest' | 'gallery', PoseSpec> = {
   rest: { position: [0, 0, 7], target: [0, 0.0, 0] },
-  gallery: { position: [-0.36, 0, -8.5], target: GALLERY_CENTER },
+  gallery: { position: [0.55, 0.2, -8.5], target: GALLERY_CENTER },
 };
 
 // Single static camera field of view (degrees) for the whole scene — used by the
