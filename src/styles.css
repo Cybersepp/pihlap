@@ -266,28 +266,12 @@ button { font: inherit; color: inherit; }
 .detail-client {
   color: rgba(253, 250, 244, 0.5);
 }
-.detail-desc {
-  /* Body rides on the display face at regular weight — reads far calmer than mono
-     for a paragraph, and keeps the panel to a disciplined two faces (display +
-     the mono utility/scramble voice). */
-  font-family: var(--font-display);
-  font-weight: 400;
-  font-size: 14.5px;
-  line-height: 1.62;
-  letter-spacing: 0.002em;
-  margin: 18px 0 24px;
-  color: rgba(253, 250, 244, 0.9);
-}
-.detail-desc .word {
-  display: inline-block;
-  white-space: pre;
-  will-change: transform, opacity, filter;
-}
 .detail-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 14px;
   align-items: center;
+  margin-top: 24px;
 }
 .detail-watch {
   font: 600 13px var(--font-mono);

@@ -8,7 +8,6 @@ export interface Work {
   client?: string;
   year: number;
   location: string;
-  description: string;
   process: string;
   loopUrl: string;
   fullPieceUrl: string;
@@ -26,7 +25,6 @@ export const works: Work[] = [
     client: "fakov",
     year: 2025,
     location: "Tallinn, Estonia",
-    description: "Music video for fakov's track Men's Health — stark, minimal frames built around a single visual idea.",
     process: "Directed and edited by Martin Pihlap.",
     loopUrl: publicAsset("loops/fakov-mens-health.mp4"),
     fullPieceUrl: "https://vimeo.com/1197106634",
@@ -39,7 +37,6 @@ export const works: Work[] = [
     title: "FF 2023 Aftermovie",
     year: 2023,
     location: "Tallinn, Estonia",
-    description: "Aftermovie capturing the energy of a 2023 fashion-film event — crowd, light, and aftermath.",
     process: "Shot and cut as a fast-paced event recap.",
     loopUrl: publicAsset("loops/ff2023-aftermovie.mp4"),
     fullPieceUrl: "https://vimeo.com/1196730156",
@@ -52,7 +49,6 @@ export const works: Work[] = [
     client: "Jessica 2010",
     year: 2025,
     location: "Tallinn, Estonia",
-    description: "Music video for Jessica 2010's Week Ago — lo-fi, observational storytelling in post-Soviet spaces.",
     process: "Directed by Martin Pihlap. Nominated for UK Music Video Awards Newcomer.",
     loopUrl: publicAsset("loops/jessica-week-ago.mp4"),
     fullPieceUrl: "https://vimeo.com/1196918333",
@@ -66,7 +62,6 @@ export const works: Work[] = [
     client: "Jessica 2010",
     year: 2024,
     location: "Tallinn, Estonia",
-    description: "VHS-toned portrait of Russian auto culture — life, transformation, and decay of the domestic car.",
     process: "Directed by Martin Pihlap. Cold post-Soviet aesthetic shot on location.",
     loopUrl: publicAsset("loops/jessica-posted.mp4"),
     fullPieceUrl: "https://vimeo.com/1002265424",
@@ -81,7 +76,6 @@ export const works: Work[] = [
     client: "Kai Angel",
     year: 2023,
     location: "Milan, Italy",
-    description: "Fashion-forward rap video following Kai Angel through Milan nightlife and a Prada party invitation.",
     process: "Directed by Martin Pihlap. Winner of Clip of the Year at Risa za Tvorchestvo.",
     loopUrl: publicAsset("loops/kai-angel-prada-party.mp4"),
     fullPieceUrl: "https://vimeo.com/1196916186",
@@ -95,7 +89,6 @@ export const works: Work[] = [
     client: "Racer Worldwide",
     year: 2024,
     location: "Tallinn, Estonia",
-    description: "Opening sequence for Makeover — Racer Worldwide's absurdist fashion mockumentary series.",
     process: "Directed by Martin Pihlap for Racer Worldwide.",
     loopUrl: publicAsset("loops/makeover-intro.mp4"),
     fullPieceUrl: "https://vimeo.com/1196916569",
@@ -109,7 +102,6 @@ export const works: Work[] = [
     client: "Racer Worldwide",
     year: 2024,
     location: "Tallinn, Estonia",
-    description: "Pilot episode of Makeover — stylist Pusik107 rebuilds identities with Racer Worldwide's wardrobe.",
     process: "Directed by Martin Pihlap. Self-ironic fashion reality for a new generation.",
     loopUrl: publicAsset("loops/makeover-s01e01.mp4"),
     fullPieceUrl: "https://vimeo.com/1197106210",
@@ -123,7 +115,6 @@ export const works: Work[] = [
     client: "Mihhail",
     year: 2026,
     location: "Estonian countryside",
-    description: "Behind-the-scenes glimpse into a spontaneous recording session — dreamlike, intimate, and unfiltered.",
     process: "Directed by Martin Pihlap. Lo-fi textures and surreal owl imagery in forest landscapes.",
     loopUrl: publicAsset("loops/mihhail-dream-blunt.mp4"),
     fullPieceUrl: "https://vimeo.com/1196916999",
@@ -136,7 +127,6 @@ export const works: Work[] = [
     title: "Moment",
     year: 2024,
     location: "Tallinn, Estonia",
-    description: "Music video built around a single gesture — hands, colour, and tension held in close-up.",
     process: "Directed by Martin Pihlap.",
     loopUrl: publicAsset("loops/moment.mp4"),
     fullPieceUrl: "https://vimeo.com/1196919620",
@@ -150,7 +140,6 @@ export const works: Work[] = [
     client: "Racer Worldwide",
     year: 2024,
     location: "Tallinn, Estonia",
-    description: "Campaign film for the Racer × remagine collaboration — product and attitude in one frame.",
     process: "Directed for Racer Worldwide.",
     loopUrl: publicAsset("loops/racer-remagine.mp4"),
     fullPieceUrl: "https://vimeo.com/1196918679",
@@ -163,7 +152,6 @@ export const works: Work[] = [
     client: "Racer Worldwide",
     year: 2025,
     location: "Tallinn, Estonia",
-    description: "Runway and world-building film for SS25 Spring Break — early-2010s internet nostalgia turned maximalist.",
     process: "Creative direction by Mihhail Zigadlo. Part of the MyRacer digital storytelling platform.",
     loopUrl: publicAsset("loops/racer-ss25.mp4"),
     fullPieceUrl: "https://vimeo.com/1196920285",
@@ -177,7 +165,6 @@ export const works: Work[] = [
     client: "THRILL PILL",
     year: 2023,
     location: "Estonia",
-    description: "High-contrast music video set in fog and ski lifts — grain, white-out light, and industrial rhythm.",
     process: "Directed by Martin Pihlap. Winner of Clip of the Month at Risa za Tvorchestvo.",
     loopUrl: publicAsset("loops/thrill-pill-plastik.mp4"),
     fullPieceUrl: "https://vimeo.com/1196919826",

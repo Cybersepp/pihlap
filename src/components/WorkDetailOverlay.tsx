@@ -88,12 +88,10 @@ export function WorkDetailOverlay({
   const meta = `${work.location} · ${work.year}`;
 
   // Cascade delays (ms) — each field waits a beat longer than the one above it so
-  // the panel assembles top-to-bottom: title wipe → meta → client → description →
-  // links. Links come last, after the description's words have finished landing.
+  // the panel assembles top-to-bottom: title wipe → meta → client → links.
   const metaDelay = 200;
   const clientDelay = 340;
-  const descDelay = work.client ? 500 : 400;
-  const linkDelay = descDelay + work.description.split(' ').length * 18 + 500;
+  const linkDelay = (work.client ? clientDelay : metaDelay) + 500;
 
   // On exit, keep the overlay mounted long enough for every field to fade back out
   // before it's released.
@@ -146,7 +144,6 @@ export function WorkDetailOverlay({
         {work.client && (
           <WordReveal className="detail-meta detail-client" text={work.client} active={active} delayMs={clientDelay} />
         )}
-        <WordReveal className="detail-desc" text={work.description} active={active} delayMs={descDelay} />
         <div className="detail-actions">
           <motion.button
             type="button"
