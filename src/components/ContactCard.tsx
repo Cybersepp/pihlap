@@ -2,10 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 
 const INSTAGRAM_HANDLE = '@martinpihlap';
 const INSTAGRAM_URL = 'https://instagram.com/martinpihlap';
-const VIMEO_LABEL = 'vimeo.com/martinpihlap';
-const VIMEO_URL = 'https://vimeo.com/martinpihlap';
-const EMAIL = 'martin@martinpihlap.com';
-const PHONE = '+372 5555 1234';
+const EMAIL = 'martinpihlap@gmail.com';
 
 // Click-to-copy value (email / phone) with a brief "copied" confirmation. Falls
 // back to a hidden textarea + execCommand where the async clipboard API is
@@ -69,22 +66,10 @@ export function ContactCard() {
           <CopyValue label="email" value={EMAIL} />
         </dd>
 
-        <dt className="contact-label">phone</dt>
-        <dd className="contact-value">
-          <CopyValue label="phone" value={PHONE} />
-        </dd>
-
         <dt className="contact-label">instagram</dt>
         <dd className="contact-value">
           <a href={INSTAGRAM_URL} target="_blank" rel="noreferrer">
             {INSTAGRAM_HANDLE}
-          </a>
-        </dd>
-
-        <dt className="contact-label">vimeo</dt>
-        <dd className="contact-value">
-          <a href={VIMEO_URL} target="_blank" rel="noreferrer">
-            {VIMEO_LABEL}
           </a>
         </dd>
 

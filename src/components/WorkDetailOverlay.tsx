@@ -75,9 +75,11 @@ function WordReveal({
 export function WorkDetailOverlay({
   work,
   onClose,
+  onPlay,
 }: {
   work: Work;
   onClose: () => void;
+  onPlay: () => void;
 }) {
   const [isPresent, safeToRemove] = usePresence();
   const active = isPresent;
@@ -146,6 +148,17 @@ export function WorkDetailOverlay({
         )}
         <WordReveal className="detail-desc" text={work.description} active={active} delayMs={descDelay} />
         <div className="detail-actions">
+          <motion.button
+            type="button"
+            className="detail-link"
+            onClick={onPlay}
+            variants={link}
+            initial="hide"
+            animate={active ? 'show' : 'hide'}
+            transition={{ duration: reduce ? 0 : 0.5, ease: [0.16, 1, 0.3, 1], delay: active ? (linkDelay - 90) / 1000 : 0 }}
+          >
+            Player ▶
+          </motion.button>
           {work.youtubeUrl && (
             <motion.a
               className="detail-link"

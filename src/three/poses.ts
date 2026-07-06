@@ -4,8 +4,10 @@
 // units tall (see Martin.tsx). All coordinates below are in those normalized
 // units. Tune live with `npm run dev` — `position` is where the camera sits,
 // `target` is the point it looks at.
-
-import * as THREE from 'three';
+//
+// This module is deliberately three.js-free so it can be imported by App's initial
+// chunk without pulling three.js in. The vector/quaternion ribbon + text-panel math
+// that DOES need three lives in ./ribbon (imported only by the lazy scene).
 
 export interface PoseSpec {
   /** Camera position [x, y, z] in normalized scene units. */
@@ -135,8 +137,18 @@ export const ICON_PX_WIDTH = 108;
 // exceeds ICON_ROW_MAX_WIDTH_FRACTION of the visible width (keeps N + gaps on-screen).
 export const ICON_BASE_SCALE = 0.3075;
 export const ICON_ROW_MAX_WIDTH_FRACTION = 0.2;
+// Mobile gets bigger targets + more air between them: each icon's DOM box is much
+// wider than its glyph (108px box vs 56px glyph), so scaled small and packed tight,
+// a near-miss lands on a neighbour's padding — including the selected icon's, which
+// then toggles closed. Larger, better-separated hit boxes fix the mis-taps.
+export const ICON_ROW_MAX_WIDTH_FRACTION_MOBILE = 0.26;
 // World gap between adjacent icons in the row.
 export const ICON_ROW_GAP = 0.12;
+export const ICON_ROW_GAP_MOBILE = 0.2;
+// The whole row (icons + gaps) is clamped to this fraction of the visible width, so
+// larger targets / gaps shrink to fit rather than running off a narrow screen. The
+// leftover (~8% split each side) keeps the outermost icons clear of the edges.
+export const ICON_ROW_MAX_TOTAL_FRACTION = 0.92;
 // Safety margin from the bottom viewport edge — the row clamps to just inside the
 // frame rather than clipping off if it's ever placed below the visible bottom.
 export const ICON_ROW_BOTTOM_MARGIN = 0.12;
@@ -207,11 +219,21 @@ export function iconLayout(
   count: number = ICON_COUNT,
 ): IconLayout {
   const { halfW, halfH } = restFrustumHalf(aspect);
+  const maxWidthFraction = isMobile
+    ? ICON_ROW_MAX_WIDTH_FRACTION_MOBILE
+    : ICON_ROW_MAX_WIDTH_FRACTION;
+  const gap = isMobile ? ICON_ROW_GAP_MOBILE : ICON_ROW_GAP;
   const fullWidth = (ICON_PX_WIDTH * ICON_BASE_SCALE) / HTML_TRANSFORM_DIVISOR;
-  const scale =
-    ICON_BASE_SCALE * Math.min(1, (ICON_ROW_MAX_WIDTH_FRACTION * 2 * halfW) / fullWidth);
-  const iconWidth = (ICON_PX_WIDTH * scale) / HTML_TRANSFORM_DIVISOR;
-  const step = iconWidth + ICON_ROW_GAP;
+  // Icon size is the smallest of three caps, so it can never overflow:
+  //   · full size    — never scale a single icon above its base size
+  //   · per-icon      — one icon ≤ maxWidthFraction of the visible width
+  //   · whole-row     — all icons + gaps fit within ICON_ROW_MAX_TOTAL_FRACTION
+  // The row-fit cap is what keeps the (larger, more-spaced) mobile row on-screen.
+  const perIconCap = maxWidthFraction * 2 * halfW;
+  const rowFitCap = (2 * halfW * ICON_ROW_MAX_TOTAL_FRACTION - (count - 1) * gap) / count;
+  const iconWidth = Math.max(0, Math.min(fullWidth, perIconCap, rowFitCap));
+  const scale = ICON_BASE_SCALE * (iconWidth / fullWidth);
+  const step = iconWidth + gap;
   // Centered on Martin (x = 0), raised MODEL.iconRise of his height above his feet
   // (so it sits around his legs, ~level with him) and set back MODEL.iconDepth in Z
   // (behind his legs). Clamped so it can't drop off the bottom of the frame.
@@ -321,24 +343,8 @@ export const TEXT_PANEL_LAYOUT = {
   narrowAspect: 0.6,
 };
 
-// World position of the text window, derived LIVE from TEXT_PANEL so dev-panel
-// edits move it instantly. Writes into `out`.
-const _tpDir = new THREE.Vector3();
-const _tpRight = new THREE.Vector3();
-export function textPanelCenter(out: THREE.Vector3): THREE.Vector3 {
-  const cam = POSES.gallery.position;
-  const [cx, cy, cz] = GALLERY_CENTER;
-  _tpDir.set(cx - cam[0], cy - cam[1], cz - cam[2]);
-  const len = _tpDir.length() || 1;
-  out.copy(_tpDir).multiplyScalar(TEXT_PANEL.pushback / len);
-  out.x += cx;
-  out.y += cy + TEXT_PANEL.shiftUp;
-  out.z += cz;
-  // Screen-right = forward × worldUp (horizontal), forward = camera → center.
-  _tpRight.set(-_tpDir.z, 0, _tpDir.x);
-  const rlen = _tpRight.length() || 1;
-  return out.addScaledVector(_tpRight, TEXT_PANEL.shiftRight / rlen);
-}
+// The world position of the text window (textPanelCenter) is derived live from
+// TEXT_PANEL in ./ribbon — it needs three, so it lives with the other vector math.
 
 // Tiny pub/sub so the dev panel's TEXT_PANEL edits trigger a re-render of the
 // window components. Position is read per-frame (live by default), but the DOM
@@ -500,50 +506,17 @@ export function nearestCongruentSlot(i: number, s: number, n: number): number {
 
 // The bell curve that shapes the ribbon's depth: 1 at center, easing to 0 at the
 // edges. `bell` is the value; `bellSlope` is its derivative d/dphase, which the
-// path's tangent (and thus each tile's facing normal) is built from.
-function bell(phase: number): number {
+// path's tangent (and thus each tile's facing normal) is built from. Exported so
+// ./ribbon (which owns the three-backed tile placement) can share them.
+export function bell(phase: number): number {
   return Math.exp(-((phase / SPIRAL.archWidth) ** 2));
 }
-function bellSlope(phase: number): number {
+export function bellSlope(phase: number): number {
   return bell(phase) * (-2 * phase) / (SPIRAL.archWidth * SPIRAL.archWidth);
 }
 
-// The ribbon's rigid rotation (SPIRAL.rotation) as a quaternion. Rebuilt from the
-// live Euler only when the rotation values actually change (dev-panel edits) —
-// otherwise the cached quaternion is returned. This is called ~100k times/sec
-// during conform, so the Euler→quaternion trig is memoized against the last
-// rotation. Scratch-backed.
-const _spiralRotE = new THREE.Euler();
-const _spiralRotQ = new THREE.Quaternion();
-let _spiralRotCacheX = NaN;
-let _spiralRotCacheY = NaN;
-let _spiralRotCacheZ = NaN;
-function spiralRotation(): THREE.Quaternion {
-  const [rx, ry, rz] = SPIRAL.rotation;
-  if (rx !== _spiralRotCacheX || ry !== _spiralRotCacheY || rz !== _spiralRotCacheZ) {
-    _spiralRotE.set(rx, ry, rz);
-    _spiralRotQ.setFromEuler(_spiralRotE);
-    _spiralRotCacheX = rx;
-    _spiralRotCacheY = ry;
-    _spiralRotCacheZ = rz;
-  }
-  return _spiralRotQ;
-}
-
-// World position of a tile at a given phase (= slot - s). phase 0 sits at the
-// crest of the arch (nearest the gallery camera at -Z), between camera and Martin.
-// Videos march sideways linearly while their depth follows the bell curve, so the
-// band arches toward the viewer in the middle and flattens off-screen at the ends.
-// The center-relative point is rotated by SPIRAL.rotation, then offset to center,
-// so the whole arch can be tipped/turned toward the camera as one rigid body.
-const _spPos = new THREE.Vector3();
-export function spiralPosition(phase: number): [number, number, number] {
-  const [cx, cy, cz] = SPIRAL.center;
-  _spPos
-    .set(SPIRAL.spread * phase, SPIRAL.heightStep * phase, -SPIRAL.depth * bell(phase))
-    .applyQuaternion(spiralRotation());
-  return [cx + _spPos.x, cy + _spPos.y, cz + _spPos.z];
-}
+// spiralRotation / spiralPosition (the tile's world placement) need three, so they
+// live in ./ribbon alongside ribbonFrame / ribbonUp.
 
 // How much a tile faces the gallery camera at a given phase: ~1 = square-on (the
 // crest and the flattened far ends), dipping on the slopes where the band turns.
@@ -565,48 +538,8 @@ export function ribbonRoll(phase: number): number {
   return SPIRAL.twist * Math.abs(phase);
 }
 
-// Scratch objects reused across calls (ribbonFrame runs per tile per frame).
-const _frameMat = new THREE.Matrix4();
-const _frameEye = new THREE.Vector3();
-const _frameTarget = new THREE.Vector3();
-const _frameUp = new THREE.Vector3();
-const _frameNormal = new THREE.Vector3();
-
-// Orientation of a tile on the ribbon at a given phase — replaces the old
-// billboard (`lookAt(camera)`). The tile's front (+Z) faces radially OUTWARD from
-// the helix axis: at phase 0 that's straight toward the gallery camera, so the
-// focused video reads square-on; tiles to the sides turn away. The up-vector is
-// rolled about that outward normal by `ribbonRoll(phase)` — zero at center,
-// growing outward — banking the band into a ribbon twist. Building it via Matrix4.lookAt
-// guarantees a proper (non-mirrored, right-side-up) rotation. Writes into `out`.
-export function ribbonFrame(phase: number, out: THREE.Quaternion): THREE.Quaternion {
-  // Outward normal of the arch path, in the horizontal plane, perpendicular to the
-  // tangent (spread, dz/dphase). At the crest → (0, 0, -1), toward the camera; on
-  // the slopes it tilts sideways so the videos there turn away, then it returns to
-  // facing the camera as the ends flatten.
-  const tz = -SPIRAL.depth * bellSlope(phase); // dz/dphase
-  _frameNormal.set(tz, 0, -SPIRAL.spread).normalize();
-  // Bank: roll world-up about the outward normal, growing with distance from
-  // center so the focused tile stays flat (zero roll) and the rest twist away.
-  _frameUp.set(0, 1, 0).applyAxisAngle(_frameNormal, ribbonRoll(phase));
-  // Build the orientation in the ribbon's LOCAL (unrotated) space, then layer the
-  // ribbon's rigid rotation on top — matching spiralPosition's rotate-then-offset.
-  // lookAt sets +Z = normalize(eye - target); target = eye - normal ⇒ +Z = normal.
-  _frameEye.set(0, 0, 0);
-  _frameTarget.copy(_frameEye).sub(_frameNormal);
-  _frameMat.lookAt(_frameEye, _frameTarget, _frameUp);
-  out.setFromRotationMatrix(_frameMat);
-  return out.premultiply(spiralRotation());
-}
-
-// The ribbon's local UP (across-band, height) direction at a given phase — the
-// banked vertical axis of the frame there. Used to conform each video's geometry
-// to the ribbon surface so neighbouring tiles' edges line up. Writes into `out`.
-const _ribbonUpQ = new THREE.Quaternion();
-export function ribbonUp(phase: number, out: THREE.Vector3): THREE.Vector3 {
-  ribbonFrame(phase, _ribbonUpQ);
-  return out.set(0, 1, 0).applyQuaternion(_ribbonUpQ);
-}
+// ribbonFrame (tile orientation) and ribbonUp (banked vertical axis) build on
+// three's Matrix4/Quaternion, so they live in ./ribbon with spiralPosition.
 
 // ── Detail / open-video view ─────────────────────────────────────────────────
 // Everything about where the clicked video lands and how it expands. One mutable
@@ -797,37 +730,5 @@ export function getDetailPoseFromWorld(
   };
 }
 
-// ── Responsive 3D text panel (contact.txt / readme.txt) ───────────────────────
-// The text window is an <Html transform> sheet: its on-screen world width is
-// width × scale / 40, then projected by the gallery camera. The scale is solved so
-// the panel fills a TARGET FRACTION of the viewport (TEXT_PANEL_LAYOUT) rather than
-// a fixed world size — so it stays the same proportion of the screen at every aspect
-// (a phone, a laptop, an ultrawide) and never shrinks to a stamp on a wide frustum.
-// Sized to the smaller of the width/height fractions so it always fits both axes.
-// Derived from the actual gallery camera distance, so it adapts continuously.
-const _tpCenter = new THREE.Vector3();
-export interface TextPanelLayout {
-  width: number;
-  height: number;
-  scale: number;
-}
-export function textPanelLayout(width: number, height: number, isMobile: boolean): TextPanelLayout {
-  const aspect = width / height || 1;
-  const cam = (isMobile ? POSES_MOBILE : POSES).gallery.position;
-  const pc = textPanelCenter(_tpCenter);
-  const dist = Math.hypot(cam[0] - pc.x, cam[1] - pc.y, cam[2] - pc.z) || 1;
-  const halfH = dist * _TAN_HALF_FOV;
-  const halfW = halfH * aspect;
-  const L = TEXT_PANEL_LAYOUT;
-  // Blend the target fractions by aspect (0 = fully narrow/phone, 1 = fully wide/
-  // desktop), so the panel size changes continuously across a resize rather than
-  // stepping at the isMobile breakpoint. smoothstep clamps outside the two edges.
-  const wideness = THREE.MathUtils.smoothstep(aspect, L.narrowAspect, L.wideAspect);
-  const widthFrac = THREE.MathUtils.lerp(L.widthFractionNarrow, L.widthFraction, wideness);
-  const heightFrac = THREE.MathUtils.lerp(L.heightFractionNarrow, L.heightFraction, wideness);
-  const scaleForW = (widthFrac * 2 * halfW * 40) / TEXT_PANEL.width;
-  const scaleForH = (heightFrac * 2 * halfH * 40) / TEXT_PANEL.height;
-  // Smaller axis wins so the panel fits within BOTH the width and height targets.
-  const scale = Math.min(scaleForW, scaleForH);
-  return { width: TEXT_PANEL.width, height: TEXT_PANEL.height, scale };
-}
+// The responsive 3D text panel layout (textPanelLayout) needs three (camera-
+// distance math + MathUtils blending), so it lives in ./ribbon.

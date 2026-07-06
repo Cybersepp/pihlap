@@ -16,6 +16,26 @@ export function isTouchDevice(): boolean {
   return window.matchMedia('(hover: none) and (pointer: coarse)').matches;
 }
 
+// Whether the browser can actually give us a WebGL context. The whole site is one
+// WebGL scene, so if this is false (old device, blocked/soft-disabled GL, headless
+// bot) we render the DOM fallback instead of a blank canvas. Result is cached — the
+// answer can't change within a session, and creating a probe context isn't free.
+let _webglCache: boolean | null = null;
+export function isWebGLAvailable(): boolean {
+  if (_webglCache !== null) return _webglCache;
+  if (typeof window === 'undefined') return false;
+  try {
+    const canvas = document.createElement('canvas');
+    _webglCache = !!(
+      window.WebGLRenderingContext &&
+      (canvas.getContext('webgl') || canvas.getContext('experimental-webgl'))
+    );
+  } catch {
+    _webglCache = false;
+  }
+  return _webglCache;
+}
+
 export function getViewportSize() {
   const vv = window.visualViewport;
   return {

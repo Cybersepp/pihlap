@@ -16,7 +16,7 @@ import {
   notifyModelRestChange,
 } from '../three/poses';
 import { applyPose } from '../three/liveCamera';
-import { DISSOLVE, GLITCH, replayDissolve, triggerGlitch } from '../three/materialSettings';
+import { DISSOLVE, GLITCH, replayDissolve, triggerGlitch } from '../three/materialDefaults';
 import { getViewportSize } from '../lib/device';
 
 // A dev-only live tuning panel for the works ribbon. Every control mutates the

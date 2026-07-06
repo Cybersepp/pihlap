@@ -19,12 +19,14 @@ import {
   type CameraTarget,
 } from './three/poses';
 import { works, Work } from './data/works';
-import { DEFAULT_MATERIAL_SETTINGS } from './three/materialSettings';
+import { DEFAULT_MATERIAL_SETTINGS } from './three/materialDefaults';
 import { readMeText } from './data/content';
 import { ContactCard } from './components/ContactCard';
 import { RibbonControls, TextWindowControls, ModelControls } from './components/RibbonControls';
 import { SignatureIntro } from './components/SignatureIntro';
-import { getViewportSize, shouldUseMobileLayout } from './lib/device';
+import { SceneBoundary } from './components/SceneBoundary';
+import { SceneFallback } from './components/SceneFallback';
+import { getViewportSize, shouldUseMobileLayout, isWebGLAvailable } from './lib/device';
 import { applyPose } from './three/liveCamera';
 
 // The 3D layer pulls in three.js + drei (~900KB). Code-split it so the desktop
@@ -61,6 +63,9 @@ export default function App() {
   // *into* the folder on close: 'open' (spilled out), 'closing' (flying back —
   // still mounted), 'closed' (unmounted).
   const [worksPhase, setWorksPhase] = useState<'open' | 'closing' | 'closed'>('closed');
+  // Whether the browser can run the WebGL scene at all. Checked once — if false we
+  // never mount the canvas and render the plain-document fallback instead.
+  const [webglAvailable] = useState(() => isWebGLAvailable());
   // Initialised synchronously so the desktop-only intro never flashes on a phone.
   const [isMobile, setIsMobile] = useState(() => shouldUseMobileLayout());
   // Live viewport size, so the detail framing re-derives on resize / orientation
@@ -354,6 +359,10 @@ export default function App() {
     },
   ];
 
+  // No WebGL (unsupported/blocked device) — never mount the canvas; serve the
+  // portfolio as a plain, fully-usable document instead of a blank scene.
+  if (!webglAvailable) return <SceneFallback />;
+
   return (
     <>
       {/* Dreamy cloudy sky backdrop — sits behind everything. */}
@@ -375,7 +384,10 @@ export default function App() {
         }
       />
 
-      {/* 3D Martin + world-anchored icons + (while a window is open) its 3D panel. */}
+      {/* 3D Martin + world-anchored icons + (while a window is open) its 3D panel.
+          Wrapped in SceneBoundary so a GL/chunk failure falls back to the plain
+          document rather than a blank canvas. */}
+      <SceneBoundary>
       <Suspense fallback={null}>
         <MartinScene
           target={cameraTarget}
@@ -395,6 +407,7 @@ export default function App() {
           materialSettings={DEFAULT_MATERIAL_SETTINGS}
         />
       </Suspense>
+      </SceneBoundary>
 
       {/* Detail view chrome: play button over the tile + right-hand info panel. */}
       <AnimatePresence>
@@ -403,6 +416,7 @@ export default function App() {
             key={`detail-${windowState.work.id}`}
             work={windowState.work}
             onClose={closeDetail}
+            onPlay={playSelected}
           />
         )}
       </AnimatePresence>

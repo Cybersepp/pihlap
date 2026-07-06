@@ -11,12 +11,10 @@ import {
   DETAIL,
   CAMERA_SMOOTH_TIME,
   nearestCongruentSlot,
-  spiralPosition,
-  ribbonFrame,
   ribbonFacing,
-  ribbonUp,
   iconLayout,
 } from './poses';
+import { spiralPosition, ribbonFrame, ribbonUp } from './ribbon';
 import { makeTileMaterial, makeBezelMaterial } from './spiralShader';
 
 export interface WorksSpiral3DProps {
@@ -42,7 +40,10 @@ const CLICK_THRESHOLD = 6; // drag less than this many px counts as a click, not
 // Off-ribbon mouse drag orbits the gallery instead of winding. Bounded so the user
 // can look around the helix without losing the framing or swinging behind Martin.
 const ORBIT_SENSITIVITY = 0.005; // drag px → radians
-const ORBIT_AZ_LIMIT = 0.5; // max azimuth swing from the gallery pose (rad)
+// Azimuth swing from the gallery pose (rad). Asymmetric: the neutral pose sits
+// off-centre, so the right side gets more room to reach the far tiles.
+const ORBIT_AZ_LIMIT_RIGHT = 0.9;
+const ORBIT_AZ_LIMIT_LEFT = 0.5;
 const ORBIT_POLAR_LIMIT = 0.32; // max polar swing from the gallery pose (rad)
 // Matches camera-controls' native draggingSmoothTime so the manual orbit trails and
 // settles exactly like the contact/readme drag, instead of snapping (rotate w/o ease).
@@ -841,9 +842,10 @@ export function WorksSpiral3D({ works, isMobile = false, open, paused, playerOpe
       lastX = e.clientX;
       lastY = e.clientY;
       moved = 0;
-      // A mouse drag that misses the ribbon orbits the gallery; a hit — or any
-      // touch/pen drag — winds the helix as before.
-      mode = e.pointerType === 'mouse' && !hitsTile(e.clientX, e.clientY) ? 'orbit' : 'wind';
+      // A drag that misses the ribbon orbits the gallery; a drag that lands on a
+      // tile winds the helix. Same rule for mouse and touch/pen, so orbiting works
+      // on mobile too (previously gated to mouse, which left touch always winding).
+      mode = !hitsTile(e.clientX, e.clientY) ? 'orbit' : 'wind';
       document.body.style.cursor = 'grabbing';
     };
     const onPointerMove = (e: PointerEvent) => {
@@ -864,7 +866,7 @@ export function WorksSpiral3D({ works, isMobile = false, open, paused, playerOpe
       if (!c) return;
       // Signs match camera-controls' native drag (deltaX = lastX - x): azimuth uses
       // -dx, polar uses -dy, so this orbits the same direction as contact/readme.
-      const nAz = clamp(orbitAz - dx * ORBIT_SENSITIVITY, -ORBIT_AZ_LIMIT, ORBIT_AZ_LIMIT);
+      const nAz = clamp(orbitAz - dx * ORBIT_SENSITIVITY, -ORBIT_AZ_LIMIT_LEFT, ORBIT_AZ_LIMIT_RIGHT);
       const nPolar = clamp(orbitPolar - dy * ORBIT_SENSITIVITY, -ORBIT_POLAR_LIMIT, ORBIT_POLAR_LIMIT);
       // Damp toward the new target (enableTransition) with a dragging-style smooth
       // time; camera-controls' per-frame update() keeps easing after release too.

@@ -2,7 +2,8 @@ import { ReactNode, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { Html } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber';
-import { GALLERY, textPanelCenter, textPanelLayout } from './poses';
+import { GALLERY } from './poses';
+import { textPanelCenter, textPanelLayout } from './ribbon';
 import { useTextPanelTuning } from './useTextPanelTuning';
 
 // Scratch vectors reused each frame (avoid per-frame allocations).

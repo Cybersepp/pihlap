@@ -308,8 +308,11 @@ button { font: inherit; color: inherit; }
   letter-spacing: 0.06em;
   color: rgba(253, 250, 244, 0.85);
   text-decoration: none;
+  border: none;
   border-bottom: 1px solid rgba(253, 250, 244, 0.3);
-  padding-bottom: 2px;
+  padding: 0 0 2px;
+  background: none;
+  cursor: pointer;
 }
 .detail-link:hover {
   color: #fff;
@@ -409,7 +412,12 @@ button { font: inherit; color: inherit; }
   line-height: 1.25;
   color: var(--text-primary);
   text-align: center;
-  white-space: nowrap;
+  /* Wrap within the icon's footprint instead of running past it — a long label like
+     "selected works" was overflowing sideways and, on the edge-most mobile icon,
+     spilling off-screen. */
+  white-space: normal;
+  max-width: 100%;
+  overflow-wrap: break-word;
   padding: 1px 6px;
   border-radius: 4px;
   /* Subtle text shadow so labels read on busy bg */
